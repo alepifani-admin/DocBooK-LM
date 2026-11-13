@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="it" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DocBooK LM</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233a3a37' stroke-width='1.25'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v5h5'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__left">
+    <button class="icon" id="btn-notebooks" title="Cambia quaderno" aria-label="Cambia quaderno">
+      <svg><use href="#i-layers"/></svg>
+    </button>
+    <span class="brand"><svg><use href="#i-notebook"/></svg>DocBooK LM</span>
+    <input class="notebook-title" id="notebook-title" aria-label="Nome del quaderno" spellcheck="false">
+  </div>
+  <div class="topbar__right">
+    <label class="model">
+      <span class="model__label">Modello</span>
+      <select class="model__select" id="model-select" aria-label="Modello"></select>
+    </label>
+    <button class="icon" id="btn-theme" title="Tema chiaro o scuro" aria-label="Cambia tema">
+      <svg><use href="#i-moon"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="workspace" id="workspace">
+
+  <section class="panel panel--sources" id="panel-sources" aria-label="Fonti">
+    <div class="panel__head">
+      <h2 class="panel__title">Fonti</h2>
+      <button class="btn btn--ghost" id="btn-add-source">
+        <svg><use href="#i-plus"/></svg>Aggiungi
+      </button>
+    </div>
+    <div class="sources-toolbar">
+      <label class="check"><input type="checkbox" id="select-all"> <span>Seleziona tutte</span></label>
+      <span class="muted" id="source-count">0 fonti</span>
+    </div>
+    <div class="panel__body" id="sources-list"></div>
+    <div class="dropzone" id="dropzone">
+      <strong>Trascina qui un documento</strong><br>
+      PDF, Word, immagini, markdown, csv
+    </div>
+  </section>
+
+  <div class="resizer" data-resizer="sources" role="separator" aria-orientation="vertical"></div>
+
+  <section class="panel panel--chat" aria-label="Chat">
+    <div class="panel__body chat" id="chat-log"></div>
+    <form class="composer" id="composer">
+      <div class="composer__box">
+        <textarea id="question" rows="1" placeholder="Fai una domanda sulle fonti selezionate" aria-label="Domanda"></textarea>
+        <div class="composer__foot">
+          <span class="muted" id="context-info"></span>
+          <div class="composer__actions">
+            <button type="button" class="icon" id="btn-stop" title="Ferma" aria-label="Ferma" hidden>
+              <svg><use href="#i-stop"/></svg>
+            </button>
+            <button type="submit" class="icon" id="btn-send" title="Invia" aria-label="Invia">
+              <svg><use href="#i-send"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <div class="resizer" data-resizer="studio" role="separator" aria-orientation="vertical"></div>
+
+  <section class="panel panel--studio" id="panel-studio" aria-label="Studio">
+    <div class="panel__head">
+      <h2 class="panel__title">Studio</h2>
+      <button class="icon" id="btn-add-note" title="Nuova nota" aria-label="Nuova nota">
+        <svg><use href="#i-plus"/></svg>
+      </button>
+    </div>
+    <div class="panel__body" id="studio-body"></div>
+  </section>
+
+</main>
+
+<aside class="viewer" id="viewer" hidden aria-label="Visualizzatore fonte">
+  <div class="viewer__head">
+    <div class="viewer__title" id="viewer-title"></div>
+    <div class="viewer__nav" id="viewer-nav"></div>
+    <button class="icon" id="btn-viewer-close" title="Chiudi" aria-label="Chiudi">
+      <svg><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="viewer__body" id="viewer-body"></div>
+</aside>
+
+<dialog class="dialog" id="add-dialog">
+  <div class="dialog__head">
+    <h2 class="dialog__title">Aggiungi una fonte</h2>
+    <button class="icon" id="btn-dialog-close" title="Chiudi" aria-label="Chiudi">
+      <svg><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="file" aria-selected="true">File</button>
+    <button class="tab" role="tab" data-tab="link" aria-selected="false">Link</button>
+    <button class="tab" role="tab" data-tab="text" aria-selected="false">Testo</button>
+  </div>
+
+  <div data-panel="file">
+    <div class="filedrop" id="filedrop">
+      <strong>Trascina qui un file</strong><br>
+      oppure
+      <button type="button" class="btn btn--small" id="btn-choose-file">Scegli un file</button>
+      <input type="file" id="file-input" multiple hidden>
+    </div>
+    <div class="dialog__foot">
+      <button type="button" class="btn" data-close>Chiudi</button>
+    </div>
+  </div>
+
+  <div data-panel="link" hidden>
+    <label class="field"><span>Indirizzo della pagina o del PDF</span>
+      <input type="url" id="url-input" placeholder="https://...">
+    </label>
+    <div class="dialog__foot">
+      <button type="button" class="btn" data-close>Annulla</button>
+      <button type="button" class="btn btn--primary" id="btn-add-url">Aggiungi link</button>
+    </div>
+  </div>
+
+  <div data-panel="text" hidden>
+    <label class="field"><span>Titolo</span>
+      <input type="text" id="text-title" placeholder="Testo incollato">
+    </label>
+    <label class="field"><span>Testo</span>
+      <textarea id="text-body" placeholder="Incolla qui il testo da usare come fonte"></textarea>
+    </label>
+    <div class="dialog__foot">
+      <button type="button" class="btn" data-close>Annulla</button>
+      <button type="button" class="btn btn--primary" id="btn-add-text">Aggiungi testo</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toasts" id="toasts"></div>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
