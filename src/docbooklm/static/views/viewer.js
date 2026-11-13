@@ -16,15 +16,22 @@ export function createViewer(root, actions) {
   const navEl = root.querySelector('#viewer-nav');
   const bodyEl = root.querySelector('#viewer-body');
   let current = null;
+  let closeTimer = null;
 
   function show() {
+    // se si riapre prima che la chiusura finisca, il timer non deve nasconderlo
+    if (closeTimer) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
     root.hidden = false;
     requestAnimationFrame(() => root.classList.add('viewer--open'));
   }
 
   function close() {
     root.classList.remove('viewer--open');
-    setTimeout(() => {
+    closeTimer = setTimeout(() => {
+      closeTimer = null;
       root.hidden = true;
       bodyEl.replaceChildren();
       navEl.replaceChildren();
@@ -169,7 +176,10 @@ export function createViewer(root, actions) {
 
   root.querySelector('#btn-viewer-close').addEventListener('click', close);
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !root.hidden) close();
+    // con un dialogo aperto Esc chiude quello, non anche il cassetto
+    if (event.key !== 'Escape' || root.hidden) return;
+    if (document.querySelector('dialog[open]')) return;
+    close();
   });
 
   return {

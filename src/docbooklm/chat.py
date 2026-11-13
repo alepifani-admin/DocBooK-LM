@@ -68,8 +68,19 @@ def _content_words(text: str) -> set[str]:
 
 
 def _sentence_around(text: str, position: int) -> str:
-    start = max(text.rfind(". ", 0, position), text.rfind("\n", 0, position))
-    start = 0 if start < 0 else start + 2
+    """La frase che contiene ``position``.
+
+    Dopo un a capo il testo riprende dal carattere successivo, non due: con
+    ``+2`` la prima parola perdeva una lettera e, se era l'unica in comune con
+    il passaggio, la citazione veniva scartata come se fosse inventata.
+    """
+    start = 0
+    dot = text.rfind(". ", 0, position)
+    if dot >= 0:
+        start = max(start, dot + 2)
+    newline = text.rfind("\n", 0, position)
+    if newline >= 0:
+        start = max(start, newline + 1)
     ends = [index for index in (text.find(". ", position), text.find("\n", position)) if index > 0]
     end = min(ends) + 1 if ends else len(text)
     return text[start:end]

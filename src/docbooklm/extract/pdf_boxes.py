@@ -33,7 +33,8 @@ def _normalize(text: str) -> tuple[str, list[int]]:
 def locate(path: Path, page_number: int, quote: str) -> dict[str, object]:
     """Rettangoli della citazione nella pagina, o lista vuota se non la trova."""
     quote = (quote or "").strip()
-    if not quote:
+    needle = _normalize(quote)[0]
+    if not quote or not needle:
         return {"found": False, "boxes": []}
 
     document = pdfium.PdfDocument(str(path))
@@ -45,11 +46,11 @@ def locate(path: Path, page_number: int, quote: str) -> dict[str, object]:
             width, height = page.get_size()
             text = textpage.get_text_range()
             normalized, mapping = _normalize(text)
-            position = normalized.find(_normalize(quote)[0])
+            position = normalized.find(needle)
             if position < 0 or width <= 0 or height <= 0:
                 return {"found": False, "boxes": []}
             start = mapping[position]
-            end = mapping[min(position + len(_normalize(quote)[0]) - 1, len(mapping) - 1)]
+            end = mapping[min(position + len(needle) - 1, len(mapping) - 1)]
 
             char_boxes: list[tuple[float, float, float, float]] = []
             for char_index in range(start, end + 1):
@@ -62,7 +63,8 @@ def locate(path: Path, page_number: int, quote: str) -> dict[str, object]:
     finally:
         document.close()
 
-    return {"found": True, "boxes": _merge_lines(char_boxes, width, height)}
+    boxes = _merge_lines(char_boxes, width, height)
+    return {"found": bool(boxes), "boxes": boxes}
 
 
 def _merge_lines(

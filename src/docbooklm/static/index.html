@@ -18,6 +18,11 @@
     <input class="notebook-title" id="notebook-title" aria-label="Nome del quaderno" spellcheck="false">
   </div>
   <div class="topbar__right">
+    <div class="panel-switch" id="panel-switch" role="group" aria-label="Pannello visibile">
+      <button type="button" class="btn btn--ghost btn--small" data-panel="sources" aria-pressed="false">Fonti</button>
+      <button type="button" class="btn btn--ghost btn--small" data-panel="chat" aria-pressed="true">Chat</button>
+      <button type="button" class="btn btn--ghost btn--small" data-panel="studio" aria-pressed="false">Studio</button>
+    </div>
     <label class="model">
       <span class="model__label">Modello</span>
       <select class="model__select" id="model-select" aria-label="Modello"></select>

@@ -27,11 +27,16 @@ function inline(text, parent) {
     } else if (token.startsWith('[')) {
       const label = token.slice(1, token.indexOf(']'));
       const href = token.slice(token.indexOf('](') + 2, -1);
-      const link = el('a', null, label);
-      link.href = href;
-      link.target = '_blank';
-      link.rel = 'noreferrer';
-      parent.appendChild(link);
+      // il testo puo' arrivare da un documento: solo link veri, mai javascript:
+      if (/^(https?:|mailto:)/i.test(href)) {
+        const link = el('a', null, label);
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        parent.appendChild(link);
+      } else {
+        parent.appendChild(document.createTextNode(label));
+      }
     } else {
       const em = el('em');
       em.textContent = token.slice(1, -1);

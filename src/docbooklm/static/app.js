@@ -280,6 +280,12 @@ const actions = {
     });
   },
   async removeNote(id) {
+    const note = state.notes.find((item) => item.id === id);
+    const confirmed = await confirmAction({
+      title: 'Eliminare la nota?',
+      message: note ? `«${note.title}» viene eliminata dallo Studio.` : 'La nota viene eliminata dallo Studio.',
+    });
+    if (!confirmed) return;
     try {
       await api.deleteNote(id);
       state.notes = state.notes.filter((note) => note.id !== id);
@@ -315,7 +321,6 @@ async function send(text, { echo = true } = {}) {
   refreshContextInfo();
 
   const turn = chatView.beginAnswer(log);
-  let finished = false;
 
   const stopStreaming = () => {
     state.streaming = false;
@@ -335,7 +340,6 @@ async function send(text, { echo = true } = {}) {
       {
         delta: (payload) => chatView.appendDelta(turn.answer, payload.text),
         done: (payload) => {
-          finished = true;
           const message = {
             role: 'assistant',
             text: payload.text,
@@ -349,7 +353,6 @@ async function send(text, { echo = true } = {}) {
           }
         },
         error: (payload) => {
-          finished = true;
           turn.turn.remove();
           chatView.errorTurn(log, payload.message || 'generazione non riuscita');
         },
@@ -510,7 +513,7 @@ $('#select-all').addEventListener('change', (event) => {
 });
 
 $('#btn-add-source').addEventListener('click', () => {
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
 });
 
 $('#btn-dialog-close').addEventListener('click', () => dialog.close());
@@ -624,6 +627,22 @@ $('#model-select').addEventListener('change', async (event) => {
   }
 });
 
+// ------------------------------------------------------ pannello a schermo stretto
+
+function showPanel(name) {
+  const workspace = $('#workspace');
+  if (name === 'chat') delete workspace.dataset.mobilePanel;
+  else workspace.dataset.mobilePanel = name;
+  localStorage.setItem('docbook.panel', name);
+  for (const button of document.querySelectorAll('#panel-switch [data-panel]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.panel === name));
+  }
+}
+
+for (const button of document.querySelectorAll('#panel-switch [data-panel]')) {
+  button.addEventListener('click', () => showPanel(button.dataset.panel));
+}
+
 $('#btn-notebooks').addEventListener('click', (event) => {
   event.stopPropagation();
   notebookMenu();
@@ -714,6 +733,7 @@ async function injectSprite() {
 async function boot() {
   await injectSprite();
   applyTheme(localStorage.getItem('docbook.theme') || 'light');
+  showPanel(localStorage.getItem('docbook.panel') || 'chat');
   await load();
 }
 

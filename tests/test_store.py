@@ -113,3 +113,10 @@ def test_messages_roundtrip(store: Store) -> None:
     messages = store.messages("nb_test")
     assert messages[0]["role"] == "assistant"
     assert messages[0]["citations"] == [{"n": 1}]
+
+
+def test_create_notebook_returns_the_stored_timestamp(store: Store) -> None:
+    created = store.create_notebook("nb_tempo", "Prova")
+    stored = store.notebook("nb_tempo")
+    assert stored is not None
+    assert created["created_at"] == stored["created_at"]

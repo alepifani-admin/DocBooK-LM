@@ -248,3 +248,24 @@ def test_client_error_is_logged(client: TestClient, caplog: pytest.LogCaptureFix
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert "api.clearSources is not a function" in caplog.text
+
+
+def test_state_falls_back_when_the_notebook_is_gone(client: TestClient) -> None:
+    # id rimasto nel browser dopo aver cancellato il quaderno: niente fantasma
+    payload = client.get("/api/state?notebook=nb_inesistente").json()
+    assert payload["notebook"]["id"] != "nb_inesistente"
+    assert payload["notebook"]["id"] == notebook_id(client)
+
+
+def test_question_that_is_too_long_is_refused(client: TestClient) -> None:
+    source = add_text_source(client)
+    response = client.post(
+        "/api/chat",
+        json={
+            "notebook": notebook_id(client),
+            "question": "a" * 4001,
+            "sources": [source["id"]],
+        },
+    )
+    assert response.status_code == 400
+    assert "troppo lunga" in response.text

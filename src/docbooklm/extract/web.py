@@ -47,28 +47,50 @@ def validate(url: str, *, allow_private: bool = False) -> str:
 
 
 def download(url: str, *, allow_private: bool = False) -> tuple[bytes, str, str]:
-    """Restituisce (contenuto, content-type, url finale)."""
+    """Restituisce (contenuto, content-type, url finale).
+
+    I reindirizzamenti si seguono a mano: ognuno viene rivalidato, altrimenti un
+    link pubblico potrebbe rimbalzare su ``127.0.0.1`` e aggirare il blocco
+    delle reti private. Il corpo si legge a pezzi, con un tetto, invece di
+    tenere in memoria una pagina da centinaia di megabyte.
+    """
     target = validate(url, allow_private=allow_private)
     headers = {"User-Agent": USER_AGENT, "Accept": "text/html,application/pdf,*/*"}
-    with httpx.Client(timeout=TIMEOUT_S, follow_redirects=True,
-                      max_redirects=MAX_REDIRECTS, headers=headers) as client:
-        try:
-            response = client.get(target)
-            response.raise_for_status()
-        except httpx.HTTPError as error:
-            raise FetchError(f"scaricamento fallito: {error}") from error
-    body = response.content
-    if len(body) > MAX_BYTES:
-        raise FetchError("pagina troppo grande (limite 20 MB)")
-    content_type = response.headers.get("content-type", "").lower()
-    return body, content_type, str(response.url)
+    with httpx.Client(timeout=TIMEOUT_S, follow_redirects=False, headers=headers) as client:
+        for _ in range(MAX_REDIRECTS + 1):
+            try:
+                with client.stream("GET", target) as response:
+                    location = response.headers.get("location")
+                    if response.is_redirect and location:
+                        target = validate(
+                            str(response.url.join(location)), allow_private=allow_private
+                        )
+                        continue
+                    response.raise_for_status()
+                    body = _read_capped(response)
+                    content_type = response.headers.get("content-type", "").lower()
+                    return body, content_type, str(response.url)
+            except httpx.HTTPError as error:
+                raise FetchError(f"scaricamento fallito: {error}") from error
+    raise FetchError("troppi reindirizzamenti")
+
+
+def _read_capped(response: httpx.Response) -> bytes:
+    body = bytearray()
+    for chunk in response.iter_bytes():
+        body.extend(chunk)
+        if len(body) > MAX_BYTES:
+            raise FetchError("pagina troppo grande (limite 20 MB)")
+    return bytes(body)
 
 
 def to_text(body: bytes, content_type: str) -> str:
-    if "html" not in content_type and not body[:200].lstrip().lower().startswith(b"<!doctype"):
-        text = body.decode("utf-8", errors="replace")
-        return text if "html" not in content_type else html_to_text(text)
-    return html_to_text(body.decode("utf-8", errors="replace"))
+    """Testo utile da una pagina: HTML ripulito, o il contenuto cosi' com'e'."""
+    raw = body.decode("utf-8", errors="replace")
+    looks_html = "html" in content_type or body[:200].lstrip().lower().startswith(b"<!doctype")
+    if looks_html or "<html" in raw[:2000].lower():
+        return html_to_text(raw)
+    return raw
 
 
 def title_from_html(body: bytes) -> str:

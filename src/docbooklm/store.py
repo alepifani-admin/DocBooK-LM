@@ -140,12 +140,13 @@ class Store:
         return dict(row) if row else None
 
     def create_notebook(self, notebook_id: str, name: str) -> dict[str, Any]:
+        created = _now()
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO notebook (id, name, created_at) VALUES (?, ?, ?)",
-                (notebook_id, name, _now()),
+                (notebook_id, name, created),
             )
-        return {"id": notebook_id, "name": name, "n_sources": 0, "created_at": _now()}
+        return {"id": notebook_id, "name": name, "n_sources": 0, "created_at": created}
 
     def rename_notebook(self, notebook_id: str, name: str) -> bool:
         with self._connect() as conn:

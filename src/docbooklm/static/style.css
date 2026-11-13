@@ -118,6 +118,10 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.25; stroke-linecap: roun
 
 .topbar__left, .topbar__right { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
 
+/* visibile solo quando i tre pannelli non stanno affiancati (vedi media query) */
+.panel-switch { display: none; }
+.panel-switch .btn[aria-pressed="true"] { background: var(--c2); color: var(--c8); }
+
 .brand {
   display: flex;
   align-items: center;
@@ -734,4 +738,6 @@ select.model__select:hover { border-color: var(--c4); }
   .workspace[data-mobile-panel="sources"] .panel--chat,
   .workspace[data-mobile-panel="studio"] .panel--chat { display: none; }
   .viewer { width: 100vw; }
+  /* sotto questa larghezza i tre pannelli non stanno affiancati: si sceglie */
+  .panel-switch { display: flex; gap: var(--s1); }
 }

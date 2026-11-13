@@ -13,6 +13,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
+from typing import IO
 from urllib.parse import urlparse
 
 import httpx
@@ -40,6 +41,23 @@ def _healthy(url: str) -> bool:
 
 def _log_path(settings: Settings, name: str) -> Path:
     return settings.data_dir / f"sidecar-{name}.log"
+
+
+MAX_LOG_BYTES = 8 * 1024 * 1024
+
+
+def _open_log(path: Path) -> IO[bytes]:
+    """Log del sidecar in append, azzerato se e' diventato enorme.
+
+    Ogni avvio e ogni tanto il file cresce: senza un tetto, in qualche mese
+    sono centinaia di megabyte che nessuno legge.
+    """
+    try:
+        if path.exists() and path.stat().st_size > MAX_LOG_BYTES:
+            path.write_bytes(b"")
+    except OSError:
+        pass
+    return path.open("ab")
 
 
 def _command(settings: Settings, name: str) -> list[str] | None:
@@ -95,7 +113,7 @@ def _start(settings: Settings, name: str) -> bool:
     if command is None:
         return False
 
-    log = _log_path(settings, name).open("ab")
+    log = _open_log(_log_path(settings, name))
     log.write(f"\n--- {time.strftime('%Y-%m-%d %H:%M:%S')} avvio {name}\n".encode())
     log.flush()
     try:

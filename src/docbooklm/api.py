@@ -212,6 +212,11 @@ async def upload_source(
     store = _store(app)
     if store.notebook(notebook) is None:
         raise HTTPException(404, "quaderno inesistente")
+    # il tetto si controlla prima di leggere: un file da 500 MB non deve
+    # arrivare intero in memoria per poi essere rifiutato
+    declared = getattr(file, "size", None)
+    if isinstance(declared, int) and declared > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"file troppo grande: limite {settings.max_upload_mb} MB")
     data = await file.read()
     try:
         source = await run_in_threadpool(
@@ -260,6 +265,8 @@ async def upload_text(
         raise HTTPException(404, "quaderno inesistente")
     if not text.strip():
         raise HTTPException(400, "testo vuoto")
+    if len(text.encode("utf-8")) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"testo troppo lungo: limite {settings.max_upload_mb} MB")
     safe = (title.strip() or "Testo incollato").replace("/", "-")[:80]
     try:
         source = await run_in_threadpool(
@@ -432,6 +439,8 @@ async def chat(body: ChatIn) -> StreamingResponse:
     question = body.question.strip()
     if not question:
         raise HTTPException(400, "domanda vuota")
+    if len(question) > 4000:
+        raise HTTPException(400, "domanda troppo lunga (massimo 4000 caratteri)")
     source_ids = [item for item in body.sources if store.source(item) is not None]
     if not source_ids:
         raise HTTPException(400, "seleziona almeno una fonte")
@@ -442,7 +451,11 @@ async def chat(body: ChatIn) -> StreamingResponse:
         for message in store.messages(body.notebook, limit=settings.history_turns * 2):
             history.append({"role": message["role"], "text": message["text"]})
 
-    passages = select_passages(store, source_ids, question, settings=settings)
+    # Il retrieval costa fino a un secondo e mezzo (embedding + rerank): nel
+    # threadpool, altrimenti il server resta fermo e ogni altra richiesta aspetta.
+    passages = await run_in_threadpool(
+        lambda: select_passages(store, source_ids, question, settings=settings)
+    )
     store.add_message(
         message_id=f"msg_{uuid.uuid4().hex[:10]}",
         notebook_id=body.notebook,
@@ -513,6 +526,10 @@ async def state(notebook: str = Query("")) -> dict[str, Any]:
     """Tutto cio' che serve all'interfaccia per disegnarsi in un colpo solo."""
     settings: Settings = get_settings()
     store = _store(app)
+    # un quaderno cancellato (o un id rimasto nel browser) non deve creare un
+    # fantasma vuoto: si ricade sul primo quaderno che esiste
+    if notebook and store.notebook(notebook) is None:
+        notebook = ""
     if not notebook:
         existing = store.notebooks()
         notebook = existing[0]["id"] if existing else f"nb_{uuid.uuid4().hex[:10]}"
@@ -523,7 +540,9 @@ async def state(notebook: str = Query("")) -> dict[str, Any]:
         "notebook": store.notebook(notebook),
         "sources": [_decorate(store, item) for item in store.sources(notebook)],
         "notes": store.notes(notebook),
-        "messages": store.messages(notebook, limit=settings.history_turns * 2),
+        # la finestra della cronologia per il prompt resta history_turns, ma
+        # l'interfaccia deve mostrare la conversazione, non solo le ultime otto
+        "messages": store.messages(notebook, limit=200),
         "models": model_payload["models"],
         "model": model_payload["current"],
         "router": settings.router_url,

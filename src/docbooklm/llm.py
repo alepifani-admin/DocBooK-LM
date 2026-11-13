@@ -93,6 +93,16 @@ async def stream_chat(
                         event = httpx.Response(200, content=data).json()
                     except ValueError:
                         continue
+                    if not isinstance(event, dict):
+                        continue
+                    # llama-server segnala gli errori a meta' stream: senza questo
+                    # controllo la risposta restava vuota e sembrava un modello muto
+                    failure = event.get("error")
+                    if failure:
+                        reason: object = (
+                            failure.get("message") if isinstance(failure, dict) else failure
+                        )
+                        raise LLMError(f"il router ha segnalato un errore: {reason}")
                     choices = event.get("choices") or []
                     if not choices:
                         continue

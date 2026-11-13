@@ -68,3 +68,20 @@ def test_verify_deduplicates_identical_citations() -> None:
     text, citations = verify(answer, [passage(1, "La Vega 64 ha sedici gigabyte di memoria.")])
     assert text.count("[1]") == 2
     assert len(citations) == 1
+
+
+def test_verify_keeps_a_citation_that_starts_a_new_line() -> None:
+    # dopo un a capo la frase riparte dalla prima lettera: se la si perde, la
+    # parola in comune con il passaggio sparisce e la citazione viene scartata
+    answer = "Risposta in due righe.\nPrefill misura la lettura del contesto [1]."
+    passages = [passage(1, "Prefill misura la lettura del contesto.")]
+    text, citations = verify(answer, passages)
+    assert text == answer
+    assert [item["n"] for item in citations] == [1]
+
+
+def test_verify_after_a_full_stop_keeps_the_first_word() -> None:
+    answer = "Prima frase. Prefill misura la lettura del contesto [1]."
+    passages = [passage(1, "Prefill misura la lettura del contesto.")]
+    _text, citations = verify(answer, passages)
+    assert citations
