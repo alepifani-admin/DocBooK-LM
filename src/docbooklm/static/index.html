@@ -100,6 +100,30 @@
   <div class="viewer__body" id="viewer-body"></div>
 </aside>
 
+<dialog class="dialog dialog--confirm" id="confirm-dialog">
+  <div class="dialog__head">
+    <h2 class="dialog__title" id="confirm-title">Confermi?</h2>
+  </div>
+  <p class="dialog__text" id="confirm-text"></p>
+  <div class="dialog__foot">
+    <button type="button" class="btn" id="confirm-cancel">Annulla</button>
+    <button type="button" class="btn btn--primary" id="confirm-ok">Elimina</button>
+  </div>
+</dialog>
+
+<dialog class="dialog dialog--confirm" id="prompt-dialog">
+  <div class="dialog__head">
+    <h2 class="dialog__title" id="prompt-title">Scrivi un nome</h2>
+  </div>
+  <label class="field"><span id="prompt-label">Nome</span>
+    <input type="text" id="prompt-input">
+  </label>
+  <div class="dialog__foot">
+    <button type="button" class="btn" id="prompt-cancel">Annulla</button>
+    <button type="button" class="btn btn--primary" id="prompt-ok">Salva</button>
+  </div>
+</dialog>
+
 <dialog class="dialog" id="add-dialog">
   <div class="dialog__head">
     <h2 class="dialog__title">Aggiungi una fonte</h2>

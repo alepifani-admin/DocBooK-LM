@@ -658,6 +658,8 @@ select.model__select:hover { border-color: var(--c4); }
 .dialog::backdrop { background: color-mix(in srgb, var(--c8) 32%, transparent); }
 .dialog__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--s2); }
 .dialog__title { font-size: var(--t3); font-weight: 500; }
+.dialog--confirm { width: min(420px, 92vw); }
+.dialog__text { color: var(--c7); font-size: var(--t2); line-height: 1.5; }
 
 .tabs { display: flex; gap: var(--s3); border-bottom: 1px solid var(--c3); margin-bottom: var(--s2); }
 .tab {

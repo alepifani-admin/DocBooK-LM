@@ -5,7 +5,15 @@ import * as chatView from './views/chat.js';
 import * as sourcesView from './views/sources.js';
 import * as studioView from './views/studio.js';
 import { createViewer } from './views/viewer.js';
-import { closeMenus, icon, menu, numberFormat, toast } from './ui.js';
+import {
+  closeMenus,
+  confirmAction,
+  icon,
+  menu,
+  numberFormat,
+  promptAction,
+  toast,
+} from './ui.js';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -179,7 +187,11 @@ const actions = {
     const source = sourceById(id);
     if (!source) return;
     if (String(id).startsWith('pending-')) return;  // segnaposto di un upload in corso
-    if (!window.confirm(`Eliminare la fonte «${source.title}»?`)) return;
+    const confirmed = await confirmAction({
+      title: 'Eliminare la fonte?',
+      message: `«${source.title}» viene rimossa dal quaderno, con il file caricato e i suoi passaggi.`,
+    });
+    if (!confirmed) return;
     try {
       await api.deleteSource(id);
     } catch (error) {
@@ -200,8 +212,16 @@ const actions = {
       toast('Ricarica la pagina (⌘R): l’interfaccia è stata aggiornata');
       return;
     }
-    const what = count === 1 ? 'l’unica fonte' : `tutte le ${count} fonti`;
-    if (!window.confirm(`Eliminare ${what} dal quaderno?\nI file caricati vengono rimossi dal disco.`)) return;
+    const message =
+      count === 1
+        ? 'L’unica fonte del quaderno viene rimossa, con il file caricato e i suoi passaggi.'
+        : `Le ${count} fonti del quaderno vengono rimosse, con i file caricati e i loro passaggi.`;
+    const confirmed = await confirmAction({
+      title: count === 1 ? 'Eliminare la fonte?' : 'Eliminare tutte le fonti?',
+      message,
+      confirmLabel: count === 1 ? 'Elimina' : 'Elimina tutte',
+    });
+    if (!confirmed) return;
     try {
       await api.clearSources(state.notebookId);
       state.sources = [];
@@ -432,7 +452,12 @@ async function switchNotebook(id) {
 }
 
 async function newNotebook() {
-  const name = window.prompt('Nome del nuovo quaderno', 'Nuovo quaderno');
+  const name = await promptAction({
+    title: 'Nuovo quaderno',
+    label: 'Nome',
+    value: 'Nuovo quaderno',
+    confirmLabel: 'Crea',
+  });
   if (!name) return;
   try {
     const notebook = await api.createNotebook(name);
@@ -558,7 +583,12 @@ panelSources.addEventListener('drop', async (event) => {
 });
 
 $('#btn-add-note').addEventListener('click', async () => {
-  const title = window.prompt('Titolo della nota', 'Nota');
+  const title = await promptAction({
+    title: 'Nuova nota',
+    label: 'Titolo',
+    value: 'Nota',
+    confirmLabel: 'Crea',
+  });
   if (title === null) return;
   try {
     const note = await api.createNote(state.notebookId, title || 'Nota', '');
