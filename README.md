@@ -75,8 +75,13 @@ Tre stadi, in ordine di costo crescente:
    candidati: trova il senso anche quando la domanda usa parole diverse
    ("quanta memoria video" contro "sedici gigabyte di VRAM");
 3. **fusione e rerank** — Reciprocal Rank Fusion (`k = 60`) delle due liste, poi
-   il cross-encoder `bge-reranker-v2-m3` riordina i 12 candidati migliori;
+   il cross-encoder `bge-reranker-v2-m3` riordina i 14 candidati migliori;
    il rerank si salta quando i passaggi entrano comunque tutti nel contesto.
+
+Quanti passaggi finiscono nel prompt lo decide il **contesto**, non un numero
+fisso: fino a 32.000 caratteri (~8.000 token, una trentina di secondi di prefill)
+per fonte, con un tetto di 16 passaggi. Con pagine brevi — bolle, fatture,
+schede — entrano tutte; con i capitoli di un libro otto o nove.
 
 I due modelli girano in **sidecar** `llama-server` separati dal router di chat:
 

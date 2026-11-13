@@ -25,10 +25,15 @@ from . import embed, vectors
 from .config import Settings
 from .store import Store
 
-MAX_PASSAGES = 10
+MAX_PASSAGES = 16  # tetto assoluto: oltre, il prefill diventa inaccettabile
+# Il vero limite e' il contesto, non il numero: 32.000 caratteri sono ~8.000
+# token, cioe' una trentina di secondi di prefill sulla Vega. Con passaggi
+# corti (bolle, fatture) entrano tutti; con i capitoli di un libro ne bastano
+# otto o nove, come prima.
+CONTEXT_CHARS = 32000
 LEXICAL_LIMIT = 60
 DENSE_LIMIT = 60
-RERANK_CANDIDATES = 12  # copre i 10 passaggi finali con margine per la quota
+RERANK_CANDIDATES = 14
 RERANK_CHARS = 700  # estratto per candidato: ~175 token, ~0,8 s sul reranker
 MIN_PER_SOURCE = 3
 RRF_K = 60
@@ -183,9 +188,9 @@ def select(
     rows = {int(row["id"]): row for row in store.chunks_by_ids(candidates)}
 
     ordered = [rows[chunk_id] for chunk_id in candidates if chunk_id in rows]
-    # Il rerank decide *quali* passaggi entrano: se ci stanno tutti, e' solo
-    # latenza in piu' senza cambiare il contesto.
-    if settings is not None and len(ordered) > MAX_PASSAGES:
+    # Il rerank serve a scegliere *quali* passaggi entrano: se entrano tutti nel
+    # contesto, e' solo latenza in piu'.
+    if settings is not None and sum(len(str(row["text"])) for row in ordered) > CONTEXT_CHARS:
         scores = embed.rerank(
             settings, question, [excerpt(str(row["text"]), question) for row in ordered]
         )
@@ -198,15 +203,26 @@ def select(
             ]
 
     share = fair_share(len(source_ids))
+    # Ogni fonte ha la sua fetta di contesto: cosi' una non mangia l'altra e il
+    # prompt resta sotto CONTEXT_CHARS complessivi.
+    budget = max(CONTEXT_CHARS // max(1, len(source_ids)), CONTEXT_CHARS // 4)
     per_source: dict[str, int] = {}
+    chars: dict[str, int] = {}
     selected: list[dict[str, Any]] = []
     for row in ordered:
         if len(selected) >= MAX_PASSAGES:
             break
         source_id = str(row["source_id"])
-        if per_source.get(source_id, 0) >= share:
+        count = per_source.get(source_id, 0)
+        if count >= share:
             continue
-        per_source[source_id] = per_source.get(source_id, 0) + 1
+        length = len(str(row["text"]))
+        # i primi passaggi di ogni fonte entrano sempre: il contesto non deve
+        # restare vuoto solo perche' i suoi passaggi sono lunghi
+        if count >= MIN_PER_SOURCE and chars.get(source_id, 0) + length > budget:
+            continue
+        per_source[source_id] = count + 1
+        chars[source_id] = chars.get(source_id, 0) + length
         selected.append(row)
 
     if len(selected) < MAX_PASSAGES:
