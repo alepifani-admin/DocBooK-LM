@@ -87,6 +87,9 @@ def embed_source(store: Store, settings: Settings, source_id: str) -> int:
     """Calcola i vettori mancanti di una fonte. Restituisce quanti ne ha scritti."""
     written = 0
     while True:
+        # la fonte puo' essere stata eliminata mentre la GPU lavorava
+        if store.source(source_id) is None:
+            break
         pending = store.chunks_without_vectors(source_id, limit=FETCH)
         if not pending:
             break

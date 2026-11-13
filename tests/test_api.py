@@ -64,6 +64,13 @@ def test_static_assets_exist(client: TestClient) -> None:
         assert client.get(asset).status_code == 200, asset
 
 
+def test_static_assets_are_revalidated(client: TestClient) -> None:
+    # senza questo, dopo un aggiornamento il browser puo' restare su un vecchio
+    # modulo JS e l'interfaccia chiama funzioni che non esistono piu'
+    response = client.get("/static/api.js")
+    assert response.headers["cache-control"] == "no-cache"
+
+
 def test_notebook_crud(client: TestClient) -> None:
     created = client.post("/api/notebooks", json={"name": "Nuovo"}).json()
     assert created["name"] == "Nuovo"
@@ -86,6 +93,42 @@ def test_upload_and_delete_source(client: TestClient) -> None:
 def test_upload_unknown_notebook(client: TestClient) -> None:
     response = client.post("/api/sources/text", data={"notebook": "nope", "text": "ciao"})
     assert response.status_code == 404
+
+
+def test_clear_sources_empties_the_notebook(client: TestClient) -> None:
+    first = add_text_source(client, "La Vega 64 ha sedici gigabyte di memoria video.")
+    second = add_text_source(client, "Il prefill misura la lettura del contesto.")
+    stored = [Path(first["path"]), Path(second["path"])]
+    assert all(path.exists() for path in stored)
+
+    response = client.delete(f"/api/sources?notebook={notebook_id(client)}")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "deleted": 2}
+
+    assert client.get(f"/api/sources?notebook={notebook_id(client)}").json()["sources"] == []
+    assert client.get(f"/api/sources/{first['id']}").status_code == 404
+    assert not any(path.exists() for path in stored)
+
+
+def test_clear_sources_leaves_other_notebooks_alone(client: TestClient) -> None:
+    add_text_source(client)
+    other = client.post("/api/notebooks", json={"name": "Altro"}).json()
+    kept = client.post(
+        "/api/sources/text", data={"notebook": other["id"], "text": "testo dell'altro quaderno"}
+    ).json()
+
+    client.delete(f"/api/sources?notebook={notebook_id(client)}")
+    listing = client.get(f"/api/sources?notebook={other['id']}").json()["sources"]
+    assert [item["id"] for item in listing] == [kept["id"]]
+
+
+def test_clear_sources_unknown_notebook(client: TestClient) -> None:
+    assert client.delete("/api/sources?notebook=nope").status_code == 404
+
+
+def test_clear_sources_on_an_empty_notebook_is_harmless(client: TestClient) -> None:
+    response = client.delete(f"/api/sources?notebook={notebook_id(client)}")
+    assert response.json() == {"ok": True, "deleted": 0}
 
 
 def test_empty_text_is_refused(client: TestClient) -> None:

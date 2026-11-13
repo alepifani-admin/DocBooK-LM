@@ -246,6 +246,7 @@ select.model__select:hover { border-color: var(--c4); }
   border-bottom: 1px solid var(--c3);
   gap: var(--s1);
 }
+.sources-toolbar__end { display: flex; align-items: center; gap: var(--s1); }
 
 .check {
   display: inline-flex;

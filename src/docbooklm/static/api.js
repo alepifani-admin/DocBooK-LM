@@ -26,6 +26,8 @@ export const api = {
     request(`/api/notebooks/${id}`, { ...json({ name }), method: 'PATCH' }),
 
   sources: (notebook) => request(`/api/sources?notebook=${encodeURIComponent(notebook)}`),
+  clearSources: (notebook) =>
+    request(`/api/sources?notebook=${encodeURIComponent(notebook)}`, { method: 'DELETE' }),
   deleteSource: (id) => request(`/api/sources/${id}`, { method: 'DELETE' }),
   source: (id) => request(`/api/sources/${id}`),
 

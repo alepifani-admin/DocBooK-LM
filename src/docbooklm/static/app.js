@@ -57,6 +57,7 @@ function renderSources() {
     state.sources.length === 0 ? '0 fonti' : `${state.sources.length} ${state.sources.length === 1 ? 'fonte' : 'fonti'}`;
   $('#select-all').checked = ready.length > 0 && ready.every((source) => state.selected.has(source.id));
   $('#select-all').disabled = ready.length === 0;
+  $('#btn-clear-sources').disabled = state.sources.length === 0;
   refreshContextInfo();
   scheduleIndexPoll();
 }
@@ -157,6 +158,21 @@ const actions = {
       state.sources = state.sources.filter((item) => item.id !== id);
       state.selected.delete(id);
       renderSources();
+    } catch (error) {
+      toast(error.message);
+    }
+  },
+  async clearSources() {
+    const count = state.sources.length;
+    if (!count) return;
+    const what = count === 1 ? 'l’unica fonte' : `tutte le ${count} fonti`;
+    if (!window.confirm(`Eliminare ${what} dal quaderno?\nI file caricati vengono rimossi dal disco.`)) return;
+    try {
+      await api.clearSources(state.notebookId);
+      state.sources = [];
+      state.selected = new Set();
+      renderSources();
+      toast(count === 1 ? 'Fonte eliminata' : `${count} fonti eliminate`);
     } catch (error) {
       toast(error.message);
     }
@@ -474,6 +490,8 @@ filedrop.addEventListener('drop', async (event) => {
   dialog.close();
   await uploadFiles(event.dataTransfer.files);
 });
+
+$('#btn-clear-sources').addEventListener('click', () => void actions.clearSources());
 
 $('#btn-add-url').addEventListener('click', () => {
   const url = $('#url-input').value.trim();

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+from starlette.types import Scope
 
 from . import __version__, indexer, llm, sidecar, vectors
 from . import chat as chat_mod
@@ -112,12 +114,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="DocBooK LM", version=__version__, lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+class _StaticFiles(StaticFiles):
+    """Asset locali, sempre rivalidati: dopo un aggiornamento il browser non
+    deve restare su un vecchio modulo JS in cache (il 304 costa nulla)."""
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", _StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    # la pagina cambia quando cambia l'interfaccia: niente copia vecchia in cache
+    return FileResponse(
+        STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"}
+    )
 
 
 # --------------------------------------------------------------------- notebook
@@ -256,6 +277,30 @@ def get_source(source_id: str) -> dict[str, Any]:
     return {"source": _decorate(store, source), "passages": store.chunks(source_id)}
 
 
+def _purge(store: Store, settings: Settings, source: dict[str, Any]) -> None:
+    """Rimuove una fonte: file caricato, pagine in cache, righe e vettori."""
+    source_id = str(source["id"])
+    if source["path"]:
+        Path(source["path"]).unlink(missing_ok=True)
+    for cached in settings.pages_dir.glob(f"{source_id}-*.png"):
+        cached.unlink(missing_ok=True)
+    store.delete_source(source_id)
+    vectors.index_for(store).invalidate(source_id)
+
+
+@app.delete("/api/sources")
+def delete_sources(notebook: str = Query(...)) -> dict[str, Any]:
+    """Svuota il quaderno delle sue fonti, in una sola chiamata."""
+    settings: Settings = get_settings()
+    store = _store(app)
+    if store.notebook(notebook) is None:
+        raise HTTPException(404, "quaderno inesistente")
+    sources = store.sources(notebook)
+    for source in sources:
+        _purge(store, settings, source)
+    return {"ok": True, "deleted": len(sources)}
+
+
 @app.delete("/api/sources/{source_id}")
 def delete_source(source_id: str) -> dict[str, Any]:
     settings: Settings = get_settings()
@@ -263,12 +308,7 @@ def delete_source(source_id: str) -> dict[str, Any]:
     source = store.source(source_id)
     if source is None:
         raise HTTPException(404, "fonte inesistente")
-    if source["path"]:
-        Path(source["path"]).unlink(missing_ok=True)
-    for cached in settings.pages_dir.glob(f"{source_id}-*.png"):
-        cached.unlink(missing_ok=True)
-    store.delete_source(source_id)
-    vectors.index_for(store).invalidate(source_id)
+    _purge(store, settings, source)
     return {"ok": True}
 
 

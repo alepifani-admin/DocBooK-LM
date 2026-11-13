@@ -39,7 +39,12 @@
     </div>
     <div class="sources-toolbar">
       <label class="check"><input type="checkbox" id="select-all"> <span>Seleziona tutte</span></label>
-      <span class="muted" id="source-count">0 fonti</span>
+      <div class="sources-toolbar__end">
+        <span class="muted" id="source-count">0 fonti</span>
+        <button class="icon" id="btn-clear-sources" title="Elimina tutte le fonti" aria-label="Elimina tutte le fonti">
+          <svg><use href="#i-trash"/></svg>
+        </button>
+      </div>
     </div>
     <div class="panel__body" id="sources-list"></div>
     <div class="dropzone" id="dropzone">
