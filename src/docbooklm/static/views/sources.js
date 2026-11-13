@@ -8,6 +8,7 @@ const ICONS = {
   image: 'image',
   text: 'file',
   web: 'globe',
+  archive: 'layers',
   pending: 'file',
 };
 
@@ -17,6 +18,7 @@ const LABELS = {
   image: 'immagine',
   text: 'testo',
   web: 'sito',
+  archive: 'archivio',
   pending: 'file',
 };
 

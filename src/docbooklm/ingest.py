@@ -10,7 +10,7 @@ from typing import Any
 
 from . import chunk as chunk_mod
 from .config import Settings
-from .extract import ExtractionError, extract_file
+from .extract import ExtractionError, extract_file, suffix_for
 from .extract import web as web_ext
 from .store import Store
 
@@ -65,7 +65,9 @@ def create_from_bytes(
             return {**existing, "duplicate": True}
 
     source_id = f"src_{uuid.uuid4().hex[:12]}"
-    suffix = Path(filename).suffix.lower()
+    # il contenuto dice piu' del nome: un PDF scaricato senza estensione resta
+    # un PDF, un archivio resta un archivio
+    suffix = suffix_for(filename, data)
     stored = _save(settings, source_id, suffix, data)
     store.add_source(
         source_id=source_id,

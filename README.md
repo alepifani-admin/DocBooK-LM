@@ -34,8 +34,11 @@ tutto; in alternativa c'e' **`DocBooK LM STOP.command`**.
 
 Tre pannelli come NotebookLM.
 
-- **Fonti**: trascini PDF, Word, immagini, markdown, csv, oppure incolli un link o
-  del testo. Ogni fonte conserva le sue pagine e i suoi passaggi.
+- **Fonti**: trascini PDF, Word, immagini, markdown, csv e archivi zip, oppure
+  incolli un link o del testo. Ogni fonte conserva le sue pagine e i suoi
+  passaggi. Un archivio zip diventa **una fonte sola**: le pagine dei documenti
+  vanno in sequenza e il nome di ciascuno diventa la sezione dei suoi passaggi.
+  I file che arrivano senza estensione vengono riconosciuti dal contenuto.
 - **Chat**: la risposta arriva in streaming con citazioni `[1]` `[2]`; cliccando
   una citazione si apre la pagina del PDF con la frase evidenziata.
 - **Studio**: note salvate sul server. Gli artefatti (riassunto, FAQ, guida di
