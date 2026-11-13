@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     history_turns: int = 4
     thinking: bool = False
 
+    # --- retrieval denso: due sidecar llama.cpp, uno per gli embedding e uno per
+    # il rerank. Non toccano il router di chat: processi separati, VRAM condivisa.
+    embed_enabled: bool = True
+    sidecar_enabled: bool = True
+    embed_url: str = "http://127.0.0.1:8091"
+    rerank_url: str = "http://127.0.0.1:8092"
+    llama_dir: Path = Path.home() / "Documents" / "LLAMA.CPP"
+    embed_model: str = "models-embed/bge-m3-Q8_0.gguf"
+    rerank_model: str = "models-embed/bge-reranker-v2-m3-Q8_0.gguf"
+
     log_level: str = "INFO"
 
     @property
@@ -46,6 +56,17 @@ class Settings(BaseSettings):
     @property
     def pages_dir(self) -> Path:
         return self.data_dir / "pages"
+
+    @property
+    def llama_server(self) -> Path:
+        return self.llama_dir / "build-vulkan" / "bin" / "llama-server"
+
+    def model_path(self, name: str) -> Path:
+        """Percorso di un GGUF: assoluto se lo e' gia', altrimenti dentro llama_dir."""
+        candidate = Path(name).expanduser()
+        if candidate.is_absolute():
+            return candidate
+        return self.llama_dir / candidate
 
     def ensure_dirs(self) -> None:
         for path in (self.data_dir, self.files_dir, self.pages_dir):

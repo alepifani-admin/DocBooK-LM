@@ -14,7 +14,13 @@ from .pdf_fixture import build_pdf
 
 @pytest.fixture()
 def settings(tmp_path: Path) -> Settings:
-    config = Settings(data_dir=tmp_path / "data", ocr_enabled=False)
+    # niente sidecar nei test: la GPU e la rete restano fuori
+    config = Settings(
+        data_dir=tmp_path / "data",
+        ocr_enabled=False,
+        embed_enabled=False,
+        sidecar_enabled=False,
+    )
     config.ensure_dirs()
     return config
 

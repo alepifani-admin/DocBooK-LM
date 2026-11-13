@@ -113,6 +113,43 @@ def _flush(group: list[Block], section: str, page: int, chunks: list[Chunk]) -> 
     return tail
 
 
+def _absorb(target: Chunk, extra: Chunk) -> None:
+    """Fonde `extra` in `target`, saltando la coda di overlap gia' presente."""
+    parts = list(target.parts)
+    overlap = 0
+    for size in range(min(len(parts), len(extra.parts)), 0, -1):
+        if parts[-size:] == extra.parts[:size]:
+            overlap = size
+            break
+    parts.extend(extra.parts[overlap:])
+    target.parts = parts
+    target.text = "\n".join(parts).strip()
+    target.n_tokens = estimate_tokens(target.text)
+
+
+def _merge_small(chunks: list[Chunk], min_chars: int = MIN_CHARS) -> list[Chunk]:
+    """Unisce i frammenti minuscoli prodotti da moduli, tabelle ed etichette.
+
+    Un PDF a colonne o un modulo produce righe che sembrano titoli ("P.IVA",
+    "ABI/CAB") e spezzano il testo in passaggi da due parole: inutili sia per
+    BM25 sia per l'embedding. Si fondono con il passaggio vicino della stessa
+    pagina, mai attraverso una pagina (la citazione deve restare esatta).
+    """
+    merged: list[Chunk] = []
+    for chunk in chunks:
+        previous = merged[-1] if merged else None
+        if (
+            previous is not None
+            and previous.page == chunk.page
+            and (len(previous.text) < min_chars or len(chunk.text) < min_chars)
+            and len(previous.text) + len(chunk.text) <= TARGET_CHARS
+        ):
+            _absorb(previous, chunk)
+        else:
+            merged.append(chunk)
+    return merged
+
+
 def chunks_from_pages(pages: Iterable[tuple[int, str]]) -> list[Chunk]:
     """Costruisce i passaggi rispettando sezioni, pagine e dimensione target."""
     chunks: list[Chunk] = []
@@ -135,7 +172,7 @@ def chunks_from_pages(pages: Iterable[tuple[int, str]]) -> list[Chunk]:
 
     if group:
         _flush(group, section, page, chunks)
-    return chunks
+    return _merge_small(chunks)
 
 
 def as_dicts(chunks: list[Chunk]) -> list[dict[str, Any]]:

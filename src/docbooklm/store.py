@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS chunk (
 );
 CREATE INDEX IF NOT EXISTS chunk_source_idx ON chunk(source_id, ord);
 
+-- un vettore per passaggio (float32 impacchettato): la ricerca e' una matrice
+-- per vettore, quindi la dimensione si legge da qui e i byte restano contigui
+CREATE TABLE IF NOT EXISTS chunk_vec (
+    chunk_id  INTEGER PRIMARY KEY REFERENCES chunk(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    dim       INTEGER NOT NULL,
+    vec       BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chunk_vec_source_idx ON chunk_vec(source_id);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
     text,
     content='chunk',
@@ -243,6 +253,88 @@ class Store:
                 (chunk_id,),
             ).fetchone()
         return dict(row) if row else None
+
+    def chunks_by_ids(self, chunk_ids: list[int]) -> list[dict[str, Any]]:
+        if not chunk_ids:
+            return []
+        placeholders = ",".join("?" for _ in chunk_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT c.*, s.title AS source_title FROM chunk c"
+                " JOIN source s ON s.id = c.source_id"
+                f" WHERE c.id IN ({placeholders})",
+                chunk_ids,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------------ vettori
+
+    def add_vectors(self, source_id: str, items: list[tuple[int, bytes, int]]) -> None:
+        """items: (chunk_id, vettore float32 impacchettato, dimensione)."""
+        with self._connect() as conn:
+            conn.executemany(
+                "INSERT INTO chunk_vec (chunk_id, source_id, dim, vec) VALUES (?, ?, ?, ?)"
+                " ON CONFLICT(chunk_id) DO UPDATE SET dim = excluded.dim, vec = excluded.vec",
+                [(chunk_id, source_id, dim, vec) for chunk_id, vec, dim in items],
+            )
+
+    def vectors(self, source_ids: list[str]) -> list[dict[str, Any]]:
+        if not source_ids:
+            return []
+        placeholders = ",".join("?" for _ in source_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT chunk_id, source_id, dim, vec FROM chunk_vec"
+                f" WHERE source_id IN ({placeholders})",
+                source_ids,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def vector_count(self, source_ids: list[str] | None = None) -> int:
+        with self._connect() as conn:
+            if source_ids:
+                placeholders = ",".join("?" for _ in source_ids)
+                row = conn.execute(
+                    f"SELECT COUNT(*) AS n FROM chunk_vec WHERE source_id IN ({placeholders})",
+                    source_ids,
+                ).fetchone()
+            else:
+                row = conn.execute("SELECT COUNT(*) AS n FROM chunk_vec").fetchone()
+        return int(row["n"]) if row else 0
+
+    def chunks_without_vectors(self, source_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT c.id, c.text FROM chunk c"
+                " LEFT JOIN chunk_vec v ON v.chunk_id = c.id"
+                " WHERE c.source_id = ? AND v.chunk_id IS NULL"
+                " ORDER BY c.ord LIMIT ?",
+                (source_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def sources_without_vectors(self, limit: int = 50) -> list[str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT c.source_id AS id FROM chunk c"
+                " LEFT JOIN chunk_vec v ON v.chunk_id = c.id"
+                " WHERE v.chunk_id IS NULL LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [str(row["id"]) for row in rows]
+
+    def embedding_progress(self, source_id: str) -> tuple[int, int]:
+        """(passaggi con vettore, passaggi totali) di una fonte."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS total,"
+                " (SELECT COUNT(*) FROM chunk_vec v WHERE v.source_id = c.source_id) AS done"
+                " FROM chunk c WHERE c.source_id = ?",
+                (source_id,),
+            ).fetchone()
+        if not row:
+            return 0, 0
+        return int(row["done"]), int(row["total"])
 
     # -------------------------------------------------------------------- search
 

@@ -282,6 +282,7 @@ select.model__select:hover { border-color: var(--c4); }
 }
 .source__meta { color: var(--c6); font-size: var(--t1); margin-top: 2px; }
 .source__meta--error { color: var(--c7); }
+.source__indexing { color: var(--c5); }
 .source--processing .source__title { color: var(--c6); }
 
 .source__menu { position: relative; }

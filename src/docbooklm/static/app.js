@@ -58,6 +58,41 @@ function renderSources() {
   $('#select-all').checked = ready.length > 0 && ready.every((source) => state.selected.has(source.id));
   $('#select-all').disabled = ready.length === 0;
   refreshContextInfo();
+  scheduleIndexPoll();
+}
+
+// L'indicizzazione semantica procede in background dopo l'upload: finché manca
+// qualche vettore si ricontrolla ogni 3 s (con un tetto), così l'avanzamento
+// sulla scheda della fonte resta leggibile.
+let indexPoll = null;
+let indexPolls = 0;
+const INDEX_POLL_MAX = 100;
+
+function indexPending() {
+  return state.sources.some(
+    (source) =>
+      source.id.startsWith('pending-') ||
+      (source.status === 'ready' && source.n_chunks > 0 && source.embedded < source.n_chunks),
+  );
+}
+
+function scheduleIndexPoll() {
+  if (indexPoll || !indexPending() || indexPolls >= INDEX_POLL_MAX) return;
+  indexPoll = window.setTimeout(async () => {
+    indexPoll = null;
+    indexPolls += 1;
+    const uploading = state.sources.some((source) => source.id.startsWith('pending-'));
+    if (!uploading) {
+      try {
+        const payload = await api.sources(state.notebookId);
+        state.sources = payload.sources;
+        renderSources();
+      } catch {
+        /* rete locale: si riprova al giro successivo */
+      }
+    }
+    scheduleIndexPoll();
+  }, 3000);
 }
 
 function renderChat() {
@@ -273,6 +308,7 @@ function autosize() {
 async function uploadFiles(files) {
   const accepted = [...files];
   if (!accepted.length) return;
+  indexPolls = 0;  // nuova indicizzazione: il tetto del polling riparte
 
   const pending = accepted.map((file) => ({
     id: `pending-${file.name}-${Math.random().toString(36).slice(2)}`,

@@ -7,7 +7,11 @@ NotebookLM locale su macOS Intel (iMac Pro, Vega 64 16 GB), motore = router
 
 - L'infrastruttura del motore **non si modifica da qui**: preset, build e
   aggiornamenti appartengono al progetto `~/Documents/LLAMA.CPP`.
-- DocBooK LM non avvia modelli propri: usa il router.
+- DocBooK LM non avvia modelli propri: usa il router per la chat. **Eccezione
+  approvata**: per il retrieval denso avvia due sidecar `llama-server` dedicati
+  (`bge-m3` su 8091, `bge-reranker-v2-m3` su 8092) con i GGUF di
+  `models-embed/`. Non toccano `models-presets.ini` e non alzano `--models-max`;
+  se non partono, la ricerca resta lessicale.
 - Audio Overview: **fuori dal progetto**.
 
 ## Regole di lavoro

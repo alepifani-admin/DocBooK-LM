@@ -55,3 +55,31 @@ def test_overlap_between_chunks() -> None:
 def test_estimate_tokens() -> None:
     assert estimate_tokens("") == 1
     assert estimate_tokens("a" * 400) == 100
+
+
+def test_small_fragments_are_merged_into_the_page_chunk() -> None:
+    # modulo a colonne: le etichette sembrano titoli e spezzano il testo
+    page = "\n".join(
+        [
+            "PRIVACY: AI SENSI DELL'ART 13 D.LGS 196/2003 I VOSTRI DATI VENGONO USATI "
+            "SOLO PER FINI CONTABILI ED AMMINISTRATIVI, come previsto dalla normativa.",
+            "FIRMA VETTORE",
+            "Cliente Destinatario",
+            "ABI/CAB",
+            "Pagamento Agente",
+            "P.IVA",
+            "IT05403151003 MPS",
+        ]
+    )
+    chunks = chunks_from_pages([(1, page)])
+    assert len(chunks) == 1
+    assert "Pagamento Agente" in chunks[0].text
+    assert chunks[0].page == 1
+
+
+def test_small_fragments_never_merge_across_pages() -> None:
+    pages = [(1, "prima pagina con poco testo"), (2, "seconda pagina con poco testo")]
+    chunks = chunks_from_pages(pages)
+    assert {chunk.page for chunk in chunks} == {1, 2}
+    assert chunks[0].text == "prima pagina con poco testo"
+    assert chunks[1].text == "seconda pagina con poco testo"

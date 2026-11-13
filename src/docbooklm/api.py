@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, llm
+from . import __version__, indexer, llm, sidecar, vectors
 from . import chat as chat_mod
 from . import ingest as ingest_mod
 from .config import Settings, get_settings
@@ -89,8 +89,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.store = store
     if not store.notebooks():
         store.create_notebook(f"nb_{uuid.uuid4().hex[:10]}", "Il mio quaderno")
-    logger.info("DocBooK LM su http://%s:%s", settings.api_host, settings.api_port)
-    yield
+
+    # I sidecar si avviano dopo il servizio: se non partono, l'interfaccia
+    # risponde lo stesso e il retrieval resta lessicale.
+    status = await run_in_threadpool(sidecar.start, settings)
+    app.state.sidecars = status
+    if status.get("embed"):
+        await run_in_threadpool(indexer.backfill, store, settings)
+
+    logger.info(
+        "DocBooK LM su http://%s:%s (embedding %s, rerank %s)",
+        settings.api_host,
+        settings.api_port,
+        "attivo" if status.get("embed") else "spento",
+        "attivo" if status.get("rerank") else "spento",
+    )
+    try:
+        yield
+    finally:
+        indexer.shutdown()
+        sidecar.stop()
 
 
 app = FastAPI(title="DocBooK LM", version=__version__, lifespan=lifespan)
@@ -138,9 +156,22 @@ def delete_notebook(notebook_id: str) -> dict[str, Any]:
 # ----------------------------------------------------------------------- fonti
 
 
+def _decorate(store: Store, source: dict[str, Any]) -> dict[str, Any]:
+    """Aggiunge all'avanzamento dell'indicizzazione semantica al record fonte."""
+    done, total = store.embedding_progress(str(source["id"]))
+    return {**source, "embedded": done, "n_chunks": total}
+
+
+def _index(store: Store, settings: Settings, source: dict[str, Any]) -> None:
+    """Mette in coda i vettori mancanti: l'upload non aspetta la GPU."""
+    if source.get("status") == "ready":
+        indexer.submit(store, settings, str(source["id"]))
+
+
 @app.get("/api/sources")
 def list_sources(notebook: str = Query(...)) -> dict[str, Any]:
-    return {"sources": _store(app).sources(notebook)}
+    store = _store(app)
+    return {"sources": [_decorate(store, item) for item in store.sources(notebook)]}
 
 
 @app.post("/api/sources", status_code=201)
@@ -154,7 +185,7 @@ async def upload_source(
         raise HTTPException(404, "quaderno inesistente")
     data = await file.read()
     try:
-        return await run_in_threadpool(
+        source = await run_in_threadpool(
             ingest_mod.create_from_bytes,
             store,
             settings,
@@ -164,6 +195,8 @@ async def upload_source(
         )
     except ingest_mod.IngestError as error:
         raise HTTPException(400, str(error)) from error
+    _index(store, settings, source)
+    return _decorate(store, source)
 
 
 @app.post("/api/sources/url", status_code=201)
@@ -173,7 +206,7 @@ async def upload_url(body: UrlIn) -> dict[str, Any]:
     if store.notebook(body.notebook) is None:
         raise HTTPException(404, "quaderno inesistente")
     try:
-        return await run_in_threadpool(
+        source = await run_in_threadpool(
             ingest_mod.create_from_url,
             store,
             settings,
@@ -182,6 +215,8 @@ async def upload_url(body: UrlIn) -> dict[str, Any]:
         )
     except ingest_mod.IngestError as error:
         raise HTTPException(400, str(error)) from error
+    _index(store, settings, source)
+    return _decorate(store, source)
 
 
 @app.post("/api/sources/text", status_code=201)
@@ -190,6 +225,7 @@ async def upload_text(
     title: str = Form("Testo incollato"),
     text: str = Form(...),
 ) -> dict[str, Any]:
+    settings: Settings = get_settings()
     store = _store(app)
     if store.notebook(notebook) is None:
         raise HTTPException(404, "quaderno inesistente")
@@ -197,16 +233,18 @@ async def upload_text(
         raise HTTPException(400, "testo vuoto")
     safe = (title.strip() or "Testo incollato").replace("/", "-")[:80]
     try:
-        return await run_in_threadpool(
+        source = await run_in_threadpool(
             ingest_mod.create_from_bytes,
             store,
-            get_settings(),
+            settings,
             notebook_id=notebook,
             filename=f"{safe}.txt",
             data=text.encode("utf-8"),
         )
     except ingest_mod.IngestError as error:
         raise HTTPException(400, str(error)) from error
+    _index(store, settings, source)
+    return _decorate(store, source)
 
 
 @app.get("/api/sources/{source_id}")
@@ -215,7 +253,7 @@ def get_source(source_id: str) -> dict[str, Any]:
     source = store.source(source_id)
     if source is None:
         raise HTTPException(404, "fonte inesistente")
-    return {"source": source, "passages": store.chunks(source_id)}
+    return {"source": _decorate(store, source), "passages": store.chunks(source_id)}
 
 
 @app.delete("/api/sources/{source_id}")
@@ -230,6 +268,7 @@ def delete_source(source_id: str) -> dict[str, Any]:
     for cached in settings.pages_dir.glob(f"{source_id}-*.png"):
         cached.unlink(missing_ok=True)
     store.delete_source(source_id)
+    vectors.index_for(store).invalidate(source_id)
     return {"ok": True}
 
 
@@ -355,7 +394,7 @@ async def chat(body: ChatIn) -> StreamingResponse:
         for message in store.messages(body.notebook, limit=settings.history_turns * 2):
             history.append({"role": message["role"], "text": message["text"]})
 
-    passages = select_passages(store, source_ids, question)
+    passages = select_passages(store, source_ids, question, settings=settings)
     store.add_message(
         message_id=f"msg_{uuid.uuid4().hex[:10]}",
         notebook_id=body.notebook,
@@ -434,7 +473,7 @@ async def state(notebook: str = Query("")) -> dict[str, Any]:
     return {
         "notebooks": store.notebooks(),
         "notebook": store.notebook(notebook),
-        "sources": store.sources(notebook),
+        "sources": [_decorate(store, item) for item in store.sources(notebook)],
         "notes": store.notes(notebook),
         "messages": store.messages(notebook, limit=settings.history_turns * 2),
         "models": model_payload["models"],

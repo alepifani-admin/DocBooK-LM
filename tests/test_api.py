@@ -16,6 +16,9 @@ from docbooklm import llm
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("DOCBOOKLM_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("DOCBOOKLM_OCR_ENABLED", "false")
+    # i test non devono avviare processi llama-server ne' aspettare la GPU
+    monkeypatch.setenv("DOCBOOKLM_EMBED_ENABLED", "false")
+    monkeypatch.setenv("DOCBOOKLM_SIDECAR_ENABLED", "false")
     api_module.get_settings.cache_clear()
     with TestClient(api_module.app) as test_client:
         yield test_client

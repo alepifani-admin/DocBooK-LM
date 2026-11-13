@@ -27,6 +27,14 @@ function meta(source) {
   return parts.join(' · ');
 }
 
+function embeddingNote(source) {
+  // L'upload non aspetta la GPU: finché i vettori non sono tutti pronti il
+  // passaggio e' cercabile solo per parole esatte.
+  if (source.status !== 'ready' || !source.n_chunks) return '';
+  if (source.embedded >= source.n_chunks) return '';
+  return `ricerca semantica ${source.embedded}/${source.n_chunks}`;
+}
+
 function card(source, state, actions) {
   const wrap = document.createElement('article');
   wrap.className = 'source' + (state.selected.has(source.id) ? ' source--active' : '');
@@ -73,6 +81,13 @@ function card(source, state, actions) {
     const info = document.createElement('div');
     info.className = 'source__meta';
     info.textContent = meta(source);
+    const note = embeddingNote(source);
+    if (note) {
+      const progress = document.createElement('span');
+      progress.className = 'source__indexing';
+      progress.textContent = ` · ${note}`;
+      info.appendChild(progress);
+    }
     main.appendChild(info);
   }
   wrap.appendChild(main);
