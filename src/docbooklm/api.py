@@ -71,6 +71,12 @@ class ChatIn(BaseModel):
     history: bool = True
 
 
+class ClientErrorIn(BaseModel):
+    message: str = ""
+    detail: str = ""
+    agent: str = ""
+
+
 # ------------------------------------------------------------------ applicazione
 
 
@@ -115,8 +121,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="DocBooK LM", version=__version__, lifespan=lifespan)
 class _StaticFiles(StaticFiles):
-    """Asset locali, sempre rivalidati: dopo un aggiornamento il browser non
-    deve restare su un vecchio modulo JS in cache (il 304 costa nulla)."""
+    """Asset locali, mai riusati dalla cache: dopo un aggiornamento il browser
+    non deve restare su un vecchio modulo JS (era successo: l'interfaccia
+    chiamava `api.clearSources`, che nel file vecchio non esisteva). I file sono
+    pochi e piccoli, scaricarli a ogni caricamento non costa nulla."""
 
     def file_response(
         self,
@@ -126,7 +134,7 @@ class _StaticFiles(StaticFiles):
         status_code: int = 200,
     ) -> Response:
         response = super().file_response(full_path, stat_result, scope, status_code)
-        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Cache-Control"] = "no-store"
         return response
 
 
@@ -521,6 +529,22 @@ async def state(notebook: str = Query("")) -> dict[str, Any]:
         "router": settings.router_url,
         "router_error": model_payload["error"],
     }
+
+
+@app.post("/api/client-error")
+def client_error(body: ClientErrorIn) -> dict[str, Any]:
+    """Un errore dell'interfaccia finisce nel log del servizio.
+
+    Il messaggio che compare in un avviso sparisce dopo pochi secondi: senza
+    questa riga, un guasto del browser resta invisibile dal lato del server.
+    """
+    logger.warning(
+        "errore nell'interfaccia: %s | %s | %s",
+        body.message[:500],
+        body.detail[:2000],
+        body.agent[:200],
+    )
+    return {"ok": True}
 
 
 @app.get("/health")

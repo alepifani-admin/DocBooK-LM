@@ -106,7 +106,9 @@ function card(source, state, actions) {
       { label: 'Elimina', icon: 'trash', onClick: () => actions.removeSource(source.id) },
     ]);
   });
-  wrap.appendChild(more);
+  // durante il caricamento la scheda e' un segnaposto: non c'e' nulla da aprire
+  // ne' da eliminare sul server
+  if (!String(source.id).startsWith('pending-')) wrap.appendChild(more);
 
   return wrap;
 }

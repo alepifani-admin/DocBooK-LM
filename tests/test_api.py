@@ -64,11 +64,11 @@ def test_static_assets_exist(client: TestClient) -> None:
         assert client.get(asset).status_code == 200, asset
 
 
-def test_static_assets_are_revalidated(client: TestClient) -> None:
-    # senza questo, dopo un aggiornamento il browser puo' restare su un vecchio
-    # modulo JS e l'interfaccia chiama funzioni che non esistono piu'
+def test_static_assets_are_not_cached(client: TestClient) -> None:    # con un modulo JS vecchio in cache l'interfaccia chiama funzioni che non
+    # esistono piu' e ogni azione finisce in un errore incomprensibile
     response = client.get("/static/api.js")
-    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["cache-control"] == "no-store"
+    assert client.get("/").headers["cache-control"] == "no-store"
 
 
 def test_notebook_crud(client: TestClient) -> None:
@@ -237,3 +237,14 @@ def test_select_model(client: TestClient) -> None:
     payload = client.post("/api/models/select", json={"model": target}).json()
     assert payload["current"] == target
     assert client.get("/api/models").json()["current"] == target
+
+
+def test_client_error_is_logged(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="docbooklm"):
+        response = client.post(
+            "/api/client-error",
+            json={"message": "api.clearSources is not a function", "detail": "app.js:120", "agent": "test"},
+        )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert "api.clearSources is not a function" in caplog.text

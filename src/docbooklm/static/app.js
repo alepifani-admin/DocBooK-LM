@@ -15,6 +15,32 @@ const studio = $('#studio-body');
 const question = $('#question');
 const dialog = $('#add-dialog');
 
+// Errori non gestiti dell'interfaccia: finiscono nel log del servizio, altrimenti
+// restano solo in un avviso che sparisce dopo tre secondi.
+function reportError(message, detail = '') {
+  try {
+    void fetch('/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: String(message || 'errore'),
+        detail: String(detail || ''),
+        agent: navigator.userAgent,
+      }),
+    }).catch(() => {});
+  } catch {
+    /* niente rete: non vale la pena rompere altro */
+  }
+}
+
+window.addEventListener('error', (event) => {
+  reportError(event.message, `${event.filename}:${event.lineno}\n${event.error?.stack || ''}`);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  reportError(reason?.message || reason, reason?.stack || '');
+});
+
 const state = {
   notebookId: localStorage.getItem('docbook.notebook') || '',
   notebook: null,
@@ -152,19 +178,28 @@ const actions = {
   async removeSource(id) {
     const source = sourceById(id);
     if (!source) return;
+    if (String(id).startsWith('pending-')) return;  // segnaposto di un upload in corso
     if (!window.confirm(`Eliminare la fonte «${source.title}»?`)) return;
     try {
       await api.deleteSource(id);
-      state.sources = state.sources.filter((item) => item.id !== id);
-      state.selected.delete(id);
-      renderSources();
     } catch (error) {
-      toast(error.message);
+      // gia' sparita sul server: l'elenco va comunque allineato
+      if (!String(error.message).includes('inesistente')) {
+        toast(error.message);
+        return;
+      }
     }
+    state.sources = state.sources.filter((item) => item.id !== id);
+    state.selected.delete(id);
+    renderSources();
   },
   async clearSources() {
     const count = state.sources.length;
     if (!count) return;
+    if (typeof api.clearSources !== 'function') {
+      toast('Ricarica la pagina (⌘R): l’interfaccia è stata aggiornata');
+      return;
+    }
     const what = count === 1 ? 'l’unica fonte' : `tutte le ${count} fonti`;
     if (!window.confirm(`Eliminare ${what} dal quaderno?\nI file caricati vengono rimossi dal disco.`)) return;
     try {
@@ -491,7 +526,11 @@ filedrop.addEventListener('drop', async (event) => {
   await uploadFiles(event.dataTransfer.files);
 });
 
-$('#btn-clear-sources').addEventListener('click', () => void actions.clearSources());
+const clearButton = $('#btn-clear-sources');
+if (clearButton) {
+  // la pagina puo' essere una copia precedente all'aggiunta del pulsante
+  clearButton.addEventListener('click', () => void actions.clearSources());
+}
 
 $('#btn-add-url').addEventListener('click', () => {
   const url = $('#url-input').value.trim();
