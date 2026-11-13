@@ -220,6 +220,15 @@ class Store:
 
     # --------------------------------------------------------------------- chunk
 
+    def replace_chunks(self, source_id: str, chunks: list[dict[str, Any]]) -> None:
+        """Riscrive i passaggi di una fonte: serve dopo una nuova estrazione.
+
+        I vettori seguono i passaggi (ON DELETE CASCADE): vanno ricalcolati.
+        """
+        with self._connect() as conn:
+            conn.execute("DELETE FROM chunk WHERE source_id = ?", (source_id,))
+        self.add_chunks(source_id, chunks)
+
     def add_chunks(self, source_id: str, chunks: list[dict[str, Any]]) -> None:
         with self._connect() as conn:
             conn.executemany(

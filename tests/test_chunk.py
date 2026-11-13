@@ -25,8 +25,19 @@ def test_blocks_keep_section_and_page() -> None:
     blocks = blocks_from_pages(pages)
     assert blocks[0].section == "INTRODUZIONE"
     assert blocks[0].page == 1
-    assert blocks[0].text == "prima riga del testo"
+    # il titolo resta nel testo: e' contesto utile al modello e all'embedding
+    assert blocks[0].text == "INTRODUZIONE"
+    assert blocks[1].text == "prima riga del testo"
     assert blocks[-1].page == 2
+
+
+def test_uppercase_data_lines_are_not_swallowed_as_headings() -> None:
+    # in un documento di trasporto il destinatario e' scritto in maiuscolo
+    page = "Cliente\nDBR_DIREZIONE REGIONALE PUGLIA\nP.ZZA A. MORO- INTERNO STAZIONE FS\n70122 BARI (BA)"
+    chunks = chunks_from_pages([(1, page)])
+    text = "\n".join(chunk.text for chunk in chunks)
+    assert "DBR_DIREZIONE REGIONALE PUGLIA" in text
+    assert "70122 BARI (BA)" in text
 
 
 def test_chunks_do_not_cross_pages() -> None:

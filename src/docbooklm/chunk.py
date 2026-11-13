@@ -85,7 +85,10 @@ def blocks_from_pages(pages: Iterable[tuple[int, str]]) -> list[Block]:
                 continue
             if looks_like_heading(line):
                 current_section = line
-                continue
+            # La riga resta nel testo anche quando apre una sezione: nei moduli e
+            # nelle tabelle una riga in maiuscolo e' un dato ("DBR_DIREZIONE
+            # REGIONALE PUGLIA"), e scartarla faceva sparire proprio cio' che
+            # l'utente cerca. Il titolo nel passaggio aiuta anche l'embedding.
             blocks.append(Block(page=page_number, section=current_section, text=line))
     return blocks
 

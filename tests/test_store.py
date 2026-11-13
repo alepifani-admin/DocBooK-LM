@@ -41,6 +41,29 @@ def test_source_lifecycle_and_cascade(store: Store) -> None:
     assert store.search(["src_a"], '"sedici"*') == []
 
 
+def test_replace_chunks_keeps_source_and_drops_old_vectors(store: Store) -> None:
+    store.add_source(
+        source_id="src_r",
+        notebook_id="nb_test",
+        kind="text",
+        title="Documento",
+        origin="doc.txt",
+        path=None,
+        sha256="r",
+    )
+    store.add_chunks("src_r", [{"text": "vecchio testo sul prefill", "page": 1}])
+    chunk_id = int(store.chunks("src_r")[0]["id"])
+    store.add_vectors("src_r", [(chunk_id, b"00000000", 2)])
+    assert store.vector_count(["src_r"]) == 1
+
+    store.replace_chunks("src_r", [{"text": "nuovo testo sulla memoria video", "page": 1}])
+
+    assert [item["text"] for item in store.chunks("src_r")] == ["nuovo testo sulla memoria video"]
+    assert store.vector_count(["src_r"]) == 0  # i vettori seguono i passaggi
+    assert store.search(["src_r"], '"memoria"*')
+    assert store.search(["src_r"], '"prefill"*') == []
+
+
 def test_fts_ignores_accents_and_matches_prefix(store: Store) -> None:
     store.add_source(
         source_id="src_b",
