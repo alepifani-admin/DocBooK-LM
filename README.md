@@ -107,6 +107,10 @@ make stop
 - il modello e' quello che il router tiene caricato: con `--models-max 1` non si
   possono avere due modelli insieme, quindi il cambio modello puo' costare il
   caricamento del preset (10–30 s la prima volta);
+- il ragionamento dei preset Qwen3 e' disattivato (`DOCBOOKLM_THINKING=false`,
+  cioe' `enable_thinking: false` nel template della chat): con il thinking
+  attivo i token finiscono nel blocco di ragionamento e il contenuto della
+  risposta resta vuoto;
 - domande molto generiche senza parole chiave usano l'inizio di ogni fonte:
   la copertura puo' essere parziale finche' non arriva il retrieval denso (F2);
 - l'OCR usa Vision: fuori da macOS le scansioni vengono rifiutate con messaggio
