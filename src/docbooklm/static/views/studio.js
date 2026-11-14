@@ -34,6 +34,7 @@ function noteRow(note, actions) {
     event.stopPropagation();
     menu(more, [
       { label: 'Apri', icon: 'search', onClick: () => actions.openNote(note) },
+      { label: 'Scarica PDF', icon: 'download', onClick: () => actions.exportNote(note) },
       { label: 'Elimina', icon: 'trash', onClick: () => actions.removeNote(note.id) },
     ]);
   });

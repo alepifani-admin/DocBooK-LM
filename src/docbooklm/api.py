@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -26,6 +27,7 @@ from starlette.types import Scope
 from . import __version__, indexer, llm, sidecar, vectors
 from . import chat as chat_mod
 from . import ingest as ingest_mod
+from . import pdf as pdf_mod
 from .config import Settings, get_settings
 from .extract import pdf as pdf_ext
 from .extract import pdf_boxes
@@ -70,6 +72,15 @@ class ChatIn(BaseModel):
     sources: list[str] = []
     model: str | None = None
     history: bool = True
+
+
+class ExportAnswerIn(BaseModel):
+    notebook: str
+    message: str
+
+
+class ExportNoteIn(BaseModel):
+    note: str
 
 
 class ClientErrorIn(BaseModel):
@@ -542,20 +553,90 @@ async def chat(body: ChatIn) -> StreamingResponse:
             )
             return
         text, citations = chat_mod.verify(answer, passages)
+        message_id = f"msg_{uuid.uuid4().hex[:10]}"
         store.add_message(
-            message_id=f"msg_{uuid.uuid4().hex[:10]}",
+            message_id=message_id,
             notebook_id=body.notebook,
             role="assistant",
             text=text,
             citations=citations,
             model=model,
         )
-        yield _sse("done", {"text": text, "citations": citations, "model": model})
+        yield _sse(
+            "done",
+            {"id": message_id, "text": text, "citations": citations, "model": model},
+        )
 
     return StreamingResponse(
         stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ------------------------------------------------------------------- esportazioni
+
+_EXPORT_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*\.pdf$")
+
+
+@app.post("/api/exports/answer")
+def export_answer(body: ExportAnswerIn) -> dict[str, Any]:
+    """Un PDF da una risposta della chat, con le fonti citate in fondo."""
+    settings: Settings = get_settings()
+    store = _store(app)
+    notebook = store.notebook(body.notebook)
+    if notebook is None:
+        raise HTTPException(404, "quaderno inesistente")
+    message = store.message(body.notebook, body.message)
+    if message is None or message["role"] != "assistant":
+        raise HTTPException(404, "risposta inesistente")
+
+    when = time.strftime("%d/%m/%Y %H:%M", time.localtime(message["created_at"]))
+    subtitle = f"DocBooK LM · {when}"
+    if message.get("model"):
+        subtitle += f" · {message['model']}"
+    path = pdf_mod.write(
+        settings.exports_dir,
+        title=f"Risposta · {notebook['name']}",
+        markdown=message["text"],
+        subtitle=subtitle,
+        citations=message.get("citations") or [],
+    )
+    return {"file": path.name, "bytes": path.stat().st_size}
+
+
+@app.post("/api/exports/note")
+def export_note(body: ExportNoteIn) -> dict[str, Any]:
+    settings: Settings = get_settings()
+    store = _store(app)
+    note = store.note(body.note)
+    if note is None:
+        raise HTTPException(404, "nota inesistente")
+    notebook = store.notebook(note["notebook_id"])
+    name = notebook["name"] if notebook else "quaderno"
+    when = time.strftime("%d/%m/%Y %H:%M", time.localtime(note["created_at"]))
+    path = pdf_mod.write(
+        settings.exports_dir,
+        title=note["title"] or "Nota",
+        markdown=note["markdown"],
+        subtitle=f"DocBooK LM · {name} · {when}",
+    )
+    return {"file": path.name, "bytes": path.stat().st_size}
+
+
+@app.get("/api/exports/{name}")
+def get_export(name: str) -> FileResponse:
+    settings: Settings = get_settings()
+    if not _EXPORT_NAME.match(name):
+        raise HTTPException(404, "esportazione inesistente")
+    path = settings.exports_dir / name
+    if not path.is_file():
+        raise HTTPException(404, "esportazione inesistente")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=name,
+        headers={"Cache-Control": "no-store"},
     )
 
 

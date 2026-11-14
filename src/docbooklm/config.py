@@ -58,6 +58,10 @@ class Settings(BaseSettings):
         return self.data_dir / "pages"
 
     @property
+    def exports_dir(self) -> Path:
+        return self.data_dir / "exports"
+
+    @property
     def llama_server(self) -> Path:
         return self.llama_dir / "build-vulkan" / "bin" / "llama-server"
 
@@ -69,7 +73,7 @@ class Settings(BaseSettings):
         return self.llama_dir / candidate
 
     def ensure_dirs(self) -> None:
-        for path in (self.data_dir, self.files_dir, self.pages_dir):
+        for path in (self.data_dir, self.files_dir, self.pages_dir, self.exports_dir):
             path.mkdir(parents=True, exist_ok=True)
 
 

@@ -462,6 +462,18 @@ class Store:
             "created_at": created,
         }
 
+    def message(self, notebook_id: str, message_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM message WHERE id = ? AND notebook_id = ?",
+                (message_id, notebook_id),
+            ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        item["citations"] = json.loads(item["citations"])
+        return item
+
     def messages(self, notebook_id: str, limit: int = 20) -> list[dict[str, Any]]:
         with self._connect() as conn:
             rows = conn.execute(

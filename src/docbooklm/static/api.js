@@ -53,6 +53,11 @@ export const api = {
     request(`/api/notes/${id}`, { ...json({ title, markdown }), method: 'PATCH' }),
   deleteNote: (id) => request(`/api/notes/${id}`, { method: 'DELETE' }),
 
+  exportAnswer: (notebook, message) =>
+    request('/api/exports/answer', json({ notebook, message })),
+  exportNote: (note) => request('/api/exports/note', json({ note })),
+  exportUrl: (name) => `/api/exports/${encodeURIComponent(name)}`,
+
   models: () => request('/api/models'),
   selectModel: (model) => request('/api/models/select', json({ model })),
 

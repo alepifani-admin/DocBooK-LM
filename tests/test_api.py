@@ -320,3 +320,91 @@ def test_question_that_is_too_long_is_refused(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert "troppo lunga" in response.text
+
+
+def answer_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, text: str = "Sedici GB [1]."
+) -> dict:
+    source = add_text_source(client)
+
+    async def fake_stream(*_args, **_kwargs) -> AsyncIterator[tuple[str, str]]:
+        yield "text", text
+
+    monkeypatch.setattr(llm, "stream_chat", fake_stream)
+    with client.stream(
+        "POST",
+        "/api/chat",
+        json={
+            "notebook": notebook_id(client),
+            "question": "quanta memoria ha la scheda?",
+            "sources": [source["id"]],
+        },
+    ) as response:
+        "".join(response.iter_text())
+    return client.get("/api/state").json()["messages"][-1]
+
+
+def test_export_answer_creates_a_downloadable_pdf(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    message = answer_once(client, monkeypatch)
+    assert message["id"]
+
+    info = client.post(
+        "/api/exports/answer",
+        json={"notebook": notebook_id(client), "message": message["id"]},
+    ).json()
+    assert info["file"].endswith(".pdf")
+    assert info["bytes"] > 1000
+
+    path = api_module.get_settings().exports_dir / info["file"]
+    assert path.read_bytes().startswith(b"%PDF")
+
+    download = client.get(f"/api/exports/{info['file']}")
+    assert download.status_code == 200
+    assert download.headers["content-type"] == "application/pdf"
+    assert "attachment" in download.headers["content-disposition"]
+    assert download.headers["cache-control"] == "no-store"
+    assert download.content.startswith(b"%PDF")
+
+
+def test_export_note_creates_a_pdf(client: TestClient) -> None:
+    note = client.post(
+        "/api/notes",
+        json={
+            "notebook": notebook_id(client),
+            "title": "Riepilogo",
+            "markdown": "## Punti\n\n- memoria video\n- sedici gigabyte",
+        },
+    ).json()
+
+    response = client.post("/api/exports/note", json={"note": note["id"]})
+    assert response.status_code == 200
+    info = response.json()
+    download = client.get(f"/api/exports/{info['file']}")
+    assert download.content.startswith(b"%PDF")
+
+
+def test_export_refuses_what_does_not_exist(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    message = answer_once(client, monkeypatch)
+    notebook = notebook_id(client)
+
+    user_message = client.get("/api/state").json()["messages"][-2]
+    assert user_message["role"] == "user"
+    assert (
+        client.post(
+            "/api/exports/answer", json={"notebook": notebook, "message": user_message["id"]}
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/exports/answer", json={"notebook": "nb_altro", "message": message["id"]}
+        ).status_code
+        == 404
+    )
+    assert client.post("/api/exports/note", json={"note": "note_inesistente"}).status_code == 404
+    assert client.get("/api/exports/inesistente.pdf").status_code == 404
+    assert client.get("/api/exports/..%2Fdocbook.db").status_code == 404

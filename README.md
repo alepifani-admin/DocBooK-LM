@@ -25,8 +25,9 @@ tutto; in alternativa c'e' **`DocBooK LM STOP.command`**.
 | Interfaccia | HTML + moduli ES nativi, nessun bundler, nessuna build |
 | API | FastAPI su `127.0.0.1:8078`, SSE per lo streaming |
 | Dati | SQLite (`data/docbook.db`): quaderni, fonti, passaggi, note, messaggi |
+| File | caricati in `data/files/`, pagine in `data/pages/`, esportazioni in `data/exports/` |
 | Ricerca | ibrida: BM25 (FTS5) + denso `bge-m3` + rerank `bge-reranker-v2-m3`, fusi con RRF |
-| PDF | pdfium per testo e rendering, Vision OCR per le scansioni |
+| PDF | pdfium per testo e rendering, Vision OCR per le scansioni; fpdf2 per l'uscita |
 | Modello | router `llama.cpp` su `:8080`, preset scelto dal selettore |
 | Embedding | due sidecar `llama-server` dedicati su `:8091` (bge-m3) e `:8092` (reranker) |
 
@@ -41,6 +42,10 @@ Tre pannelli come NotebookLM.
   I file che arrivano senza estensione vengono riconosciuti dal contenuto.
 - **Chat**: la risposta arriva in streaming con citazioni `[1]` `[2]`; cliccando
   una citazione si apre la pagina del PDF con la frase evidenziata.
+- **PDF in uscita**: da ogni risposta (icona di download sotto il testo) e da
+  ogni nota (menu «Scarica PDF») nasce un file A4 in `data/exports/`, con titolo,
+  fonti citate in fondo e numero di pagina. Il browser scarica il file appena
+  creato; la cartella tiene al massimo 200 file e una settimana di storia.
 - **Studio**: note salvate sul server. Gli artefatti (riassunto, FAQ, guida di
   studio, timeline, briefing, mappa mentale) compaiono nell'interfaccia e vengono
   generati a partire dalla fase F3.
@@ -149,6 +154,8 @@ make stop
 | `GET /api/sources/{id}/page/{n}.png` | pagina del PDF in PNG |
 | `GET /api/sources/{id}/locate?quote=` | rettangoli della frase nella pagina |
 | `GET/POST/DELETE /api/notes` | note dello Studio |
+| `POST /api/exports/answer` · `POST /api/exports/note` | creano il PDF in `data/exports/` |
+| `GET /api/exports/{nome}` | scarica il PDF creato |
 | `POST /api/chat` | SSE: `meta`, `reasoning`, `delta`, `done`, `error` |
 | `GET /api/models` · `POST /api/models/select` | preset del router e modello corrente |
 | `GET /health` | stato del servizio e del router |

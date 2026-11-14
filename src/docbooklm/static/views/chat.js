@@ -84,6 +84,13 @@ function actionsBar(message, actions) {
   save.addEventListener('click', () => actions.saveNote(message));
   bar.appendChild(save);
 
+  const pdf = el('button', 'icon');
+  pdf.type = 'button';
+  pdf.title = 'Esporta in PDF';
+  pdf.appendChild(icon('download'));
+  pdf.addEventListener('click', () => actions.exportAnswer(message));
+  bar.appendChild(pdf);
+
   const again = el('button', 'icon');
   again.type = 'button';
   again.title = 'Rigenera';

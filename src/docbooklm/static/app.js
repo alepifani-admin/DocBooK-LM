@@ -23,6 +23,17 @@ const studio = $('#studio-body');
 const question = $('#question');
 const dialog = $('#add-dialog');
 
+// Il PDF lo costruisce il server: qui si apre solo il download del file appena
+// creato, senza passare da un'altra finestra.
+function downloadFile(name) {
+  const link = document.createElement('a');
+  link.href = api.exportUrl(name);
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 // Errori non gestiti dell'interfaccia: finiscono nel log del servizio, altrimenti
 // restano solo in un avviso che sparisce dopo tre secondi.
 function reportError(message, detail = '') {
@@ -257,6 +268,28 @@ const actions = {
       toast(error.message);
     }
   },
+  async exportAnswer(message) {
+    if (!message.id) {
+      toast('La risposta non è ancora salvata: riprova tra un istante');
+      return;
+    }
+    try {
+      const info = await api.exportAnswer(state.notebookId, message.id);
+      downloadFile(info.file);
+      toast('PDF creato');
+    } catch (error) {
+      toast(error.message);
+    }
+  },
+  async exportNote(note) {
+    try {
+      const info = await api.exportNote(note.id);
+      downloadFile(info.file);
+      toast('PDF creato');
+    } catch (error) {
+      toast(error.message);
+    }
+  },
   regenerate(message) {
     const index = state.messages.indexOf(message);
     const previous = index > 0 ? state.messages[index - 1] : null;
@@ -342,6 +375,7 @@ async function send(text, { echo = true } = {}) {
         reasoning: (payload) => chatView.showReasoning(turn, payload.chars),
         done: (payload) => {
           const message = {
+            id: payload.id,
             role: 'assistant',
             text: payload.text,
             citations: payload.citations || [],
@@ -700,6 +734,9 @@ async function load() {
     state.sources = payload.sources;
     state.notes = payload.notes;
     state.messages = (payload.messages || []).map((message) => ({
+      // l'id serve per esportare la risposta in PDF: senza, il pulsante non sa
+      // quale messaggio chiedere al server
+      id: message.id,
       role: message.role,
       text: message.text,
       citations: message.citations || [],
