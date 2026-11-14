@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -499,8 +500,10 @@ async def chat(body: ChatIn) -> StreamingResponse:
             },
         )
         collected: list[str] = []
+        reasoning_chars = 0
+        last_reported = 0.0
         try:
-            async for delta in llm.stream_chat(
+            async for kind, piece in llm.stream_chat(
                 settings,
                 model=model,
                 messages=messages,
@@ -509,8 +512,18 @@ async def chat(body: ChatIn) -> StreamingResponse:
                 top_p=settings.top_p,
                 thinking=settings.thinking,
             ):
-                collected.append(delta)
-                yield _sse("delta", {"text": delta})
+                if kind == "reasoning":
+                    # un token per evento saturerebbe il canale: si aggiorna al
+                    # massimo ogni 0,8 s, solo per far vedere che il modello sta
+                    # pensando (con gpt-oss la prima parola arriva dopo minuti)
+                    reasoning_chars += len(piece)
+                    now = time.monotonic()
+                    if last_reported == 0.0 or now - last_reported >= 0.8:
+                        last_reported = now
+                        yield _sse("reasoning", {"chars": reasoning_chars})
+                    continue
+                collected.append(piece)
+                yield _sse("delta", {"text": piece})
         except llm.LLMError as error:
             logger.warning("generazione interrotta: %s", error)
             yield _sse("error", {"message": str(error)})
@@ -518,7 +531,15 @@ async def chat(body: ChatIn) -> StreamingResponse:
 
         answer = "".join(collected).strip()
         if not answer:
-            yield _sse("error", {"message": "il modello non ha prodotto testo"})
+            yield _sse(
+                "error",
+                {
+                    "message": (
+                        "il modello non ha prodotto testo: prova un altro modello "
+                        "nel selettore in alto"
+                    )
+                },
+            )
             return
         text, citations = chat_mod.verify(answer, passages)
         store.add_message(

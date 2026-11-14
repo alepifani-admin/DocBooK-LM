@@ -381,6 +381,7 @@ select.model__select:hover { border-color: var(--c4); }
 
 .answer { line-height: 22px; }
 .answer > * + * { margin-top: var(--s2); }
+.answer__hint { margin-top: var(--s1); }
 .answer h1, .answer h2, .answer h3 { font-size: var(--t3); font-weight: 500; line-height: 24px; }
 .answer ul, .answer ol { padding-left: var(--s3); }
 .answer li + li { margin-top: var(--s1); }

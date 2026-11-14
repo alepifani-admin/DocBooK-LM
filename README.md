@@ -149,7 +149,7 @@ make stop
 | `GET /api/sources/{id}/page/{n}.png` | pagina del PDF in PNG |
 | `GET /api/sources/{id}/locate?quote=` | rettangoli della frase nella pagina |
 | `GET/POST/DELETE /api/notes` | note dello Studio |
-| `POST /api/chat` | SSE: `meta`, `delta`, `done`, `error` |
+| `POST /api/chat` | SSE: `meta`, `reasoning`, `delta`, `done`, `error` |
 | `GET /api/models` · `POST /api/models/select` | preset del router e modello corrente |
 | `GET /health` | stato del servizio e del router |
 
@@ -162,6 +162,11 @@ make stop
   cioe' `enable_thinking: false` nel template della chat): con il thinking
   attivo i token finiscono nel blocco di ragionamento e il contenuto della
   risposta resta vuoto;
+- **gpt-oss** (Harmony) non guarda `enable_thinking`: con `DOCBOOKLM_THINKING=false`
+  il servizio manda `reasoning_effort: low`, altrimenti il modello spende tutti
+  i `max_tokens` nel ragionamento e la risposta resta vuota. I suoi pensieri
+  non finiscono nel testo: arrivano come evento `reasoning` e l'interfaccia
+  mostra «sto ragionando…» finche' non comincia la risposta;
 - domande molto generiche senza parole chiave usano l'inizio di ogni fonte: la
   copertura puo' essere parziale;
 - i vettori restano nel database: se cambi modello di embedding (`DOCBOOKLM_EMBED_MODEL`)

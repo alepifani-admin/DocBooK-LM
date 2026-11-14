@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -175,9 +176,9 @@ def test_chat_streams_and_verifies_citations(
 ) -> None:
     source = add_text_source(client)
 
-    async def fake_stream(*_args, **_kwargs) -> AsyncIterator[str]:
-        yield "La scheda ha sedici gigabyte "
-        yield "di memoria video [1]. Il resto è inventato [7]."
+    async def fake_stream(*_args, **_kwargs) -> AsyncIterator[tuple[str, str]]:
+        yield "text", "La scheda ha sedici gigabyte "
+        yield "text", "di memoria video [1]. Il resto è inventato [7]."
 
     monkeypatch.setattr(llm, "stream_chat", fake_stream)
 
@@ -204,8 +205,6 @@ def test_chat_streams_and_verifies_citations(
     assert "delta" in names
     assert names[-1] == "done"
 
-    import json
-
     done = json.loads(events[-1][1])
     assert "[1]" in done["text"]
     assert "[7]" not in done["text"]
@@ -217,12 +216,50 @@ def test_chat_streams_and_verifies_citations(
     assert messages[-1]["citations"][0]["chunk_id"]
 
 
+def test_chat_shows_reasoning_while_the_model_thinks(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = add_text_source(client)
+
+    async def fake_stream(*_args, **_kwargs) -> AsyncIterator[tuple[str, str]]:
+        # gpt-oss scrive prima il ragionamento: la chat deve dire che sta
+        # lavorando invece di restare muta per minuti
+        yield "reasoning", "x" * 900
+        yield "text", "Sedici GB [1]."
+
+    monkeypatch.setattr(llm, "stream_chat", fake_stream)
+    events: list[tuple[str, str]] = []
+    with client.stream(
+        "POST",
+        "/api/chat",
+        json={
+            "notebook": notebook_id(client),
+            "question": "quanta memoria ha la scheda?",
+            "sources": [source["id"]],
+        },
+    ) as response:
+        event = ""
+        for line in response.iter_lines():
+            if line.startswith("event:"):
+                event = line[6:].strip()
+            elif line.startswith("data:"):
+                events.append((event, line[5:].strip()))
+
+    names = [name for name, _ in events]
+    assert "reasoning" in names
+    reasoning = [json.loads(payload) for name, payload in events if name == "reasoning"]
+    assert reasoning[0]["chars"] == 900
+    done = json.loads(events[-1][1])
+    assert "x" not in done["text"]
+    assert "Sedici GB [1]." in done["text"]
+
+
 def test_chat_reports_engine_error(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     source = add_text_source(client)
 
-    async def broken(*_args, **_kwargs) -> AsyncIterator[str]:
+    async def broken(*_args, **_kwargs) -> AsyncIterator[tuple[str, str]]:
         raise llm.LLMError("router giù")
-        yield ""  # pragma: no cover
+        yield "text", ""  # pragma: no cover
 
     monkeypatch.setattr(llm, "stream_chat", broken)
     with client.stream(

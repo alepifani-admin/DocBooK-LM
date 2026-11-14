@@ -152,13 +152,34 @@ export function beginAnswer(log) {
 }
 
 export function appendDelta(answer, text) {
+  clearReasoning(answer);
   answer.textContent += text;
   const log = answer.closest('.chat');
   if (log) scrollToEnd(log);
 }
 
+// gpt-oss e simili pensano per minuti prima della prima parola: senza questa
+// riga la chat sembra bloccata e si finisce per interrompere una risposta viva
+export function showReasoning(turn, chars) {
+  let hint = turn.turn.querySelector('.answer__hint');
+  if (!hint) {
+    hint = el('div', 'muted answer__hint');
+    turn.turn.appendChild(hint);
+  }
+  const count = Number(chars) || 0;
+  hint.textContent = count
+    ? `sto ragionando… ${count.toLocaleString('it-IT')} caratteri`
+    : 'sto ragionando…';
+}
+
+function clearReasoning(answer) {
+  const hint = answer.closest('.turn')?.querySelector('.answer__hint');
+  if (hint) hint.remove();
+}
+
 export function finishAnswer(answerElement, message, actions) {
   const { turn, answer } = answerElement;
+  clearReasoning(answer);
   answer.replaceChildren();
   const rendered = renderMarkdown(message.text || '');
   while (rendered.firstChild) answer.appendChild(rendered.firstChild);

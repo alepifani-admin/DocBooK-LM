@@ -62,8 +62,13 @@ async def stream_chat(
     temperature: float,
     top_p: float,
     thinking: bool = False,
-) -> AsyncIterator[str]:
-    """Genera token per token; solleva LLMError con il messaggio del router."""
+) -> AsyncIterator[tuple[str, str]]:
+    """Genera pezzi ``("text"|"reasoning", testo)``; solleva LLMError con il
+    messaggio del router.
+
+    ``reasoning`` serve altrimenti l'attesa e' muta: un gpt-oss impiega minuti a
+    ragionare prima di scrivere la prima parola.
+    """
     payload = {
         "model": model,
         "messages": messages,
@@ -71,12 +76,19 @@ async def stream_chat(
         "max_tokens": max_tokens,
         "temperature": temperature,
         "top_p": top_p,
-        # Qwen3 chiede esplicitamente di disattivare il ragionamento: senza
-        # questo il modello consuma i token nel blocco "thinking" e la risposta
-        # resta vuota. Gli altri preset ignorano il parametro.
-        "chat_template_kwargs": {"enable_thinking": thinking},
+        "chat_template_kwargs": {
+            # Qwen3 chiede esplicitamente di disattivare il ragionamento.
+            "enable_thinking": thinking,
+            # gpt-oss ignora enable_thinking e usa la sua variabile Harmony:
+            # con "medium" o "high" il ragionamento si mangia tutti i
+            # max_tokens e la risposta resta vuota (finish_reason "length").
+            "reasoning_effort": "high" if thinking else "low",
+        },
     }
     url = f"{settings.router_url}/v1/chat/completions"
+    reasoning_chars = 0
+    emitted = 0
+    finish_reason = ""
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
             async with client.stream("POST", url, json=payload) as response:
@@ -106,9 +118,24 @@ async def stream_chat(
                     choices = event.get("choices") or []
                     if not choices:
                         continue
-                    delta = choices[0].get("delta") or {}
+                    choice = choices[0]
+                    finish_reason = choice.get("finish_reason") or finish_reason
+                    delta = choice.get("delta") or {}
+                    thought = delta.get("reasoning_content")
+                    if thought:
+                        reasoning_chars += len(str(thought))
+                        yield "reasoning", str(thought)
                     content = delta.get("content")
                     if content:
-                        yield str(content)
+                        emitted += 1
+                        yield "text", str(content)
         except httpx.HTTPError as error:
             raise LLMError(f"connessione al router interrotta: {error}") from error
+
+    # nessun testo e tutti i token spesi a pensare: e' il caso di gpt-oss con
+    # max_tokens basso, e senza questo messaggio sembrava un modello rotto
+    if not emitted and reasoning_chars and finish_reason == "length":
+        raise LLMError(
+            "il modello ha usato tutti i token per ragionare senza scrivere la risposta: "
+            "riduci le fonti selezionate o alza DOCBOOKLM_MAX_TOKENS"
+        )

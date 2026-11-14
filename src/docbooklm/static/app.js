@@ -339,6 +339,7 @@ async function send(text, { echo = true } = {}) {
       },
       {
         delta: (payload) => chatView.appendDelta(turn.answer, payload.text),
+        reasoning: (payload) => chatView.showReasoning(turn, payload.chars),
         done: (payload) => {
           const message = {
             role: 'assistant',
