@@ -24,7 +24,8 @@ quadre, per esempio [2]. Puoi citare piu' passaggi insieme: [1][4].
 esistono.
 4. Se i passaggi non bastano a rispondere, dillo in una frase e indica cosa manca.
 5. Non scrivere "secondo il documento" o "in base alle fonti": metti soltanto la citazione.
-6. Non ripetere l'elenco dei passaggi e non riportare i numeri in una nota finale."""
+6. Non ripetere l'elenco dei passaggi e non riportare i numeri in una nota finale.
+7. Quando servono tabelle, elenchi, sezioni o un ordine preciso, usa markdown semplice: tabelle con | e la riga di separazione, elenchi con - o 1., titoli con #. La stessa impaginazione viene riprodotta nel PDF esportato."""
 
 _CITE = re.compile(r"\[(\d+(?:\s*[,;]\s*\d+)*)\]")
 _SENTENCE = re.compile(r"[^.!?\n]+[.!?]?")

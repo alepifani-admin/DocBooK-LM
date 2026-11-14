@@ -44,8 +44,15 @@ Tre pannelli come NotebookLM.
   una citazione si apre la pagina del PDF con la frase evidenziata.
 - **PDF in uscita**: da ogni risposta (icona di download sotto il testo) e da
   ogni nota (menu «Scarica PDF») nasce un file A4 in `data/exports/`, con titolo,
-  fonti citate in fondo e numero di pagina. Il browser scarica il file appena
-  creato; la cartella tiene al massimo 200 file e una settimana di storia.
+  fonti citate in fondo e numero di pagina. L'impaginazione della chat viene
+  riprodotta: titoli, grassetto e corsivo, elenchi con rientri (anche annidati),
+  checklist, citazioni, blocchi di codice e **tabelle vere** — colonne,
+  intestazione in grassetto e intestazione ripetuta quando la tabella passa alla
+  pagina successiva. Anche i tag HTML che i modelli mescolano al markdown
+  (`<br>`, `<b>`, `<i>`) diventano a capo e stili, sia a schermo sia nel PDF; il
+  prompt chiede esplicitamente di esprimere tabelle, elenchi e titoli in
+  markdown, così l'impaginazione richiesta non si perde nell'esportazione. Il browser scarica il file appena creato; la cartella tiene
+  al massimo 200 file e una settimana di storia.
 - **Studio**: note salvate sul server. Gli artefatti (riassunto, FAQ, guida di
   studio, timeline, briefing, mappa mentale) compaiono nell'interfaccia e vengono
   generati a partire dalla fase F3.

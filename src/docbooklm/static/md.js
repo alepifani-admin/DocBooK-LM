@@ -11,12 +11,28 @@ function el(tag, className, text) {
 }
 
 function inline(text, parent) {
+  // I modelli infilano HTML nel markdown (tipico <br> nelle celle): senza
+  // conversione finirebbe a schermo come testo. Il PDF fa la stessa cosa, cosi'
+  // quello che si vede e quello che si stampa coincidono.
+  const parts = String(text).split(/<br\s*\/?>/i);
+  for (let index = 0; index < parts.length; index += 1) {
+    if (index > 0) parent.appendChild(document.createElement('br'));
+    inlinePart(parts[index], parent);
+  }
+  return parent;
+}
+
+function inlinePart(text, parent) {
+  const clean = text
+    .replace(/<\/?(b|strong)>/gi, '**')
+    .replace(/<\/?(i|em)>/gi, '*')
+    .replace(/<\/?[a-z][^>]*>/gi, '');
   // Tokenizza **grassetto**, *corsivo*, `codice`, [testo](url).
   const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
   let last = 0;
   let match;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) parent.appendChild(document.createTextNode(text.slice(last, match.index)));
+  while ((match = pattern.exec(clean)) !== null) {
+    if (match.index > last) parent.appendChild(document.createTextNode(clean.slice(last, match.index)));
     const token = match[0];
     if (token.startsWith('**')) {
       const strong = el('strong');
@@ -44,7 +60,7 @@ function inline(text, parent) {
     }
     last = match.index + token.length;
   }
-  if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  if (last < clean.length) parent.appendChild(document.createTextNode(clean.slice(last)));
   return parent;
 }
 

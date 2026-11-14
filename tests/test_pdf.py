@@ -127,3 +127,50 @@ def test_malformed_markdown_is_still_a_pdf() -> None:
     data = pdf.render("Prova", "un **grassetto non chiuso e 2 * 3\n\n```\ncodice senza fine")
     assert data.startswith(b"%PDF")
     assert len(data) > 1000
+
+
+def test_table_is_a_table_not_flattened_rows(tmp_path: Path) -> None:
+    markdown = """| Cliente | Indirizzo |
+|---|---|
+| Alfa | via Roma 1 |
+| Beta | via Milano 2 |
+"""
+    text = text_of(pdf.render("Tabella", markdown), tmp_path)
+    for expected in ("Cliente", "Indirizzo", "Alfa", "via Roma 1", "Beta", "via Milano 2"):
+        assert expected in text
+    # le celle restano separate: niente righe appiattite con un separatore
+    assert "Alfa · via Roma 1" not in text
+
+
+def test_long_table_repeats_the_header_on_the_next_page(tmp_path: Path) -> None:
+    rows = "".join(f"| cliente {index} | via numero {index} |\n" for index in range(1, 140))
+    markdown = "| Cliente | Indirizzo |\n|---|---|\n" + rows
+    data = pdf.render("Tabella lunga", markdown)
+    assert pages_of(data, tmp_path) > 1
+    assert "Cliente" in text_of(data, tmp_path, 1)
+
+
+def test_checklist_and_nested_items(tmp_path: Path) -> None:
+    markdown = """- [x] attività conclusa
+- [ ] attività da fare
+  - dettaglio annidato
+1. primo passo
+"""
+    text = text_of(pdf.render("Elenco", markdown), tmp_path)
+    assert "[x] attività conclusa" in text
+    assert "[ ] attività da fare" in text
+    assert "dettaglio annidato" in text
+    assert "1. primo passo" in text
+
+
+def test_html_that_models_mix_into_markdown_is_normalised(tmp_path: Path) -> None:
+    markdown = """Riga con <b>grassetto</b>, <i>corsivo</i> e un <br>a capo.
+
+| Voce | Dettagli |
+|---|---|
+| [13] | <b>Seduta</b> Speed<br>Attesa 2<br>Ritiro 1 |
+"""
+    text = text_of(pdf.render("Prova", markdown), tmp_path)
+    assert "<br>" not in text and "<b>" not in text and "<i>" not in text
+    assert "grassetto" in text and "corsivo" in text
+    assert "Seduta" in text and "Attesa 2" in text and "Ritiro 1" in text
