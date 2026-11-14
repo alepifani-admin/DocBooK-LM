@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -106,11 +106,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await run_in_threadpool(indexer.backfill, store, settings)
 
     logger.info(
-        "DocBooK LM su http://%s:%s (embedding %s, rerank %s)",
+        "DocBooK LM su http://%s:%s (embedding %s, rerank %s, asset %s)",
         settings.api_host,
         settings.api_port,
         "attivo" if status.get("embed") else "spento",
         "attivo" if status.get("rerank") else "spento",
+        STATIC_PREFIX,
     )
     try:
         yield
@@ -120,6 +121,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="DocBooK LM", version=__version__, lifespan=lifespan)
+
+
 class _StaticFiles(StaticFiles):
     """Asset locali, mai riusati dalla cache: dopo un aggiornamento il browser
     non deve restare su un vecchio modulo JS (era successo: l'interfaccia
@@ -141,11 +144,25 @@ class _StaticFiles(StaticFiles):
 app.mount("/static", _StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+# Ogni avvio espone gli asset a un indirizzo diverso. `no-store` impedisce di
+# salvarli, ma non recupera una copia gia' in cache da prima: se il browser ha
+# ancora un `app.js` vecchio con una scadenza futura, lo usa senza chiedere
+# niente al server. Cambiando il prefisso a ogni avvio l'indirizzo non e' mai
+# quello di una copia vecchia; gli import dei moduli sono relativi, quindi anche
+# `views/chat.js`, `api.js` e gli altri seguono lo stesso prefisso.
+STATIC_TOKEN = uuid.uuid4().hex[:8]
+STATIC_PREFIX = f"/s/{STATIC_TOKEN}"
+
+app.mount(STATIC_PREFIX, _StaticFiles(directory=str(STATIC_DIR)), name="static-versioned")
+
+
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
+def index() -> HTMLResponse:
     # la pagina cambia quando cambia l'interfaccia: niente copia vecchia in cache
-    return FileResponse(
-        STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"}
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(
+        html.replace("/static/", f"{STATIC_PREFIX}/"),
+        headers={"Cache-Control": "no-store"},
     )
 
 

@@ -45,6 +45,12 @@ Tre pannelli come NotebookLM.
   studio, timeline, briefing, mappa mentale) compaiono nell'interfaccia e vengono
   generati a partire dalla fase F3.
 
+**Cache.** Il servizio espone gli asset sotto un prefisso nuovo a ogni avvio
+(`/s/<token>/app.js`): una copia vecchia rimasta nel browser non ha lo stesso
+indirizzo e viene comunque riscaricata, anche se era stata salvata con una
+scadenza futura. `Cache-Control: no-store` accompagna sia la pagina sia i file,
+e `/static/...` resta come ripiego per una pagina già in cache.
+
 Stile vincolante per ogni modifica futura (`src/docbooklm/static/style.css`):
 
 - spaziature solo sulla **scala 8** (`--s1`…`--s8`: 8, 16, 24, 32, 40, 48, 64, 80 px);

@@ -719,7 +719,7 @@ async function load() {
 
 async function injectSprite() {
   try {
-    const response = await fetch('/static/icons.svg');
+    const response = await fetch(new URL('./icons.svg', import.meta.url));
     const markup = await response.text();
     const holder = document.createElement('div');
     holder.style.display = 'none';

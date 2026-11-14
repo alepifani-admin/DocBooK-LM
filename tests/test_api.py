@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -59,7 +60,20 @@ def test_index_is_served(client: TestClient) -> None:
     assert "DocBooK LM" in response.text
 
 
+def test_index_points_to_a_fresh_static_prefix(client: TestClient) -> None:
+    # a ogni avvio il prefisso cambia: un modulo rimasto in cache da prima non
+    # ha piu' lo stesso indirizzo e viene scaricato di nuovo
+    html = client.get("/").text
+    match = re.search(r'src="(/s/[0-9a-f]+/app\.js)"', html)
+    assert match, html
+    response = client.get(match.group(1))
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "/static/" not in html
+
+
 def test_static_assets_exist(client: TestClient) -> None:
+    # il percorso fisso resta come ripiego per una pagina vecchia in cache
     for asset in ("/static/app.js", "/static/style.css", "/static/icons.svg", "/static/api.js"):
         assert client.get(asset).status_code == 200, asset
 
